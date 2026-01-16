@@ -140,6 +140,8 @@ class _PagingWidgetState extends State<PagingWidget> {
   final _pageController = GlobalKey<PageFlipWidgetState>();
   final _pageKey = GlobalKey();
   final List<TextSpan> _pageSpans = [];
+  bool _isFrontMatter = false;
+  late TextStyle _contentStyle;
 
   @override
   void didUpdateWidget(covariant PagingWidget oldWidget) {
@@ -310,6 +312,34 @@ class _PagingWidgetState extends State<PagingWidget> {
     return false;
   }
 
+  bool _isFrontMatterContent(String rawText, String chapterTitle) {
+    final cleaned = rawText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (cleaned.isEmpty) return false;
+
+    final lower = cleaned.toLowerCase();
+    final titleLower = chapterTitle.trim().toLowerCase();
+
+    final lengthOk = cleaned.length <= 2000;
+    final shortLines = rawText.split(RegExp(r'\r?\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).length;
+
+    final looksLikeFrontMatter = shortLines <= 14;
+    final containsTitle = titleLower.isNotEmpty && lower.contains(titleLower);
+
+    return lengthOk && looksLikeFrontMatter && containsTitle;
+  }
+
+  TextStyle _resolveContentStyle() {
+    if (!_isFrontMatter) return widget.style;
+
+    final baseFontSize = widget.style.fontSize ?? 12;
+    return widget.style.copyWith(
+      fontSize: baseFontSize * 0.9,
+      height: 1.2,
+      letterSpacing: 0.0,
+      wordSpacing: 0.0,
+    );
+  }
+
   Future<void> _paginate() async {
     final pageSize = _initializedRenderBox.size;
     _pageSpans.clear();
@@ -321,6 +351,9 @@ class _PagingWidgetState extends State<PagingWidget> {
     }
 
     contentToParse = contentToParse.trim();
+
+    _isFrontMatter = _isFrontMatterContent(widget.textContent, widget.chapterTitle);
+    _contentStyle = _resolveContentStyle();
 
     contentToParse = contentToParse.replaceAll(RegExp(r'<\?xml[^?]*\?>\s*'), '');
 
@@ -428,12 +461,12 @@ class _PagingWidgetState extends State<PagingWidget> {
 
       return TextSpan(
         text: text,
-        style: widget.style.copyWith(
-          color: widget.style.color,
+        style: _contentStyle.copyWith(
+          color: _contentStyle.color,
           fontFamily: 'SFPro',
-          height: 1.5,
-          letterSpacing: 0.1,
-          wordSpacing: 0.5,
+          height: _isFrontMatter ? 1.25 : 1.5,
+          letterSpacing: _isFrontMatter ? 0.0 : 0.1,
+          wordSpacing: _isFrontMatter ? 0.0 : 0.5,
           overflow: TextOverflow.visible,
         ),
       );
@@ -498,16 +531,16 @@ class _PagingWidgetState extends State<PagingWidget> {
             baseline: TextBaseline.alphabetic,
             child: Container(
               width: maxWidth,
-              padding: EdgeInsets.only(bottom: 8.h, top: 4.h),
+              padding: EdgeInsets.only(bottom: _isFrontMatter ? 4.h : 8.h, top: _isFrontMatter ? 2.h : 4.h),
               child: Text(
                 poetryText,
                 textAlign: TextAlign.left,
-                style: widget.style.copyWith(
-                  color: widget.style.color,
+                style: _contentStyle.copyWith(
+                  color: _contentStyle.color,
                   fontFamily: 'SFPro',
-                  height: 1.6,
-                  letterSpacing: 0.1,
-                  wordSpacing: 0.5,
+                  height: _isFrontMatter ? 1.3 : 1.6,
+                  letterSpacing: _isFrontMatter ? 0.0 : 0.1,
+                  wordSpacing: _isFrontMatter ? 0.0 : 0.5,
                 ),
               ),
             ),
@@ -524,15 +557,15 @@ class _PagingWidgetState extends State<PagingWidget> {
               baseline: TextBaseline.alphabetic,
               child: Container(
                 width: maxWidth,
-                padding: EdgeInsets.symmetric(vertical: 8.h),
+                padding: EdgeInsets.symmetric(vertical: _isFrontMatter ? 4.h : 8.h),
                 alignment: Alignment.center,
                 child: Text(
                   paragraphText,
                   textAlign: TextAlign.center,
-                  style: widget.style.copyWith(
-                    color: widget.style.color,
+                  style: _contentStyle.copyWith(
+                    color: _contentStyle.color,
                     fontFamily: 'SFPro',
-                    height: 1.5,
+                    height: _isFrontMatter ? 1.25 : 1.5,
                   ),
                 ),
               ),
@@ -542,10 +575,12 @@ class _PagingWidgetState extends State<PagingWidget> {
           // For prose, use regular indented paragraph
           List<InlineSpan> children = [];
 
-          children.add(TextSpan(
-            text: '\u00A0\u00A0\u00A0\u00A0\u00A0',
-            style: widget.style,
-          ));
+          if (!_isFrontMatter) {
+            children.add(TextSpan(
+              text: '\u00A0\u00A0\u00A0\u00A0\u00A0',
+              style: _contentStyle,
+            ));
+          }
 
           for (var child in node.nodes) {
             final span = await _parseNode(child, maxWidth, isPoetry: false);
@@ -571,12 +606,12 @@ class _PagingWidgetState extends State<PagingWidget> {
 
         return TextSpan(
           children: children,
-          style: widget.style.copyWith(
-            color: widget.style.color,
-            fontSize: (widget.style.fontSize ?? 16) + 4,
+          style: _contentStyle.copyWith(
+            color: _contentStyle.color,
+            fontSize: (_contentStyle.fontSize ?? 16) + 4,
             fontWeight: FontWeight.w500,
             fontStyle: FontStyle.normal,
-            height: 1.5,
+            height: _isFrontMatter ? 1.25 : 1.5,
           ),
         );
       } else if (node.localName == 'blockquote') {
@@ -653,10 +688,10 @@ class _PagingWidgetState extends State<PagingWidget> {
             child: Text(
               quoteText,
               textAlign: TextAlign.left,
-              style: widget.style.copyWith(
-                color: widget.style.color,
+              style: _contentStyle.copyWith(
+                color: _contentStyle.color,
                 fontStyle: FontStyle.normal,
-                fontSize: widget.style.fontSize! - 2,
+                fontSize: (_contentStyle.fontSize ?? 12) - 2,
                 fontWeight: FontWeight.w400,
               ),
             ),
@@ -674,11 +709,11 @@ class _PagingWidgetState extends State<PagingWidget> {
               child: Text(
                 authorName,
                 textAlign: TextAlign.center,
-                style: widget.style.copyWith(
-                  color: widget.style.color,
+                style: _contentStyle.copyWith(
+                  color: _contentStyle.color,
                   fontStyle: FontStyle.normal,
                   fontWeight: FontWeight.bold,
-                  fontSize: widget.style.fontSize! * 0.95,
+                  fontSize: (_contentStyle.fontSize ?? 12) * 0.95,
                   letterSpacing: 0.2,
                 ),
               ),
@@ -731,11 +766,11 @@ class _PagingWidgetState extends State<PagingWidget> {
               child: Text(
                 authorText,
                 textAlign: TextAlign.right,
-                style: widget.style.copyWith(
-                  color: widget.style.color,
+                style: _contentStyle.copyWith(
+                  color: _contentStyle.color,
                   fontStyle: FontStyle.normal,
                   fontWeight: FontWeight.w600,
-                  height: 1.3,
+                  height: _isFrontMatter ? 1.2 : 1.3,
                 ),
               ),
             ),
@@ -779,11 +814,11 @@ class _PagingWidgetState extends State<PagingWidget> {
               child: Text(
                 text,
                 textAlign: TextAlign.center,
-                style: widget.style.copyWith(
-                  color: widget.style.color,
+                style: _contentStyle.copyWith(
+                  color: _contentStyle.color,
                   fontStyle: FontStyle.normal,
-                  height: 1.5,
-                  fontSize: widget.style.fontSize,
+                  height: _isFrontMatter ? 1.25 : 1.5,
+                  fontSize: _contentStyle.fontSize,
                 ),
               ),
             ),
@@ -798,12 +833,12 @@ class _PagingWidgetState extends State<PagingWidget> {
                 child: Text(
                   authorText,
                   textAlign: TextAlign.center,
-                  style: widget.style.copyWith(
-                    color: widget.style.color,
+                  style: _contentStyle.copyWith(
+                    color: _contentStyle.color,
                     fontStyle: FontStyle.normal,
                     fontWeight: FontWeight.w500,
-                    height: 1.3,
-                    fontSize: widget.style.fontSize,
+                    height: _isFrontMatter ? 1.2 : 1.3,
+                    fontSize: _contentStyle.fontSize,
                   ),
                 ),
               ),
@@ -823,8 +858,8 @@ class _PagingWidgetState extends State<PagingWidget> {
 
         return TextSpan(
           children: children,
-          style: widget.style.copyWith(
-            color: widget.style.color,
+          style: _contentStyle.copyWith(
+            color: _contentStyle.color,
             fontStyle: FontStyle.normal,
           ),
         );
@@ -835,8 +870,8 @@ class _PagingWidgetState extends State<PagingWidget> {
         }
         return TextSpan(
           children: children,
-          style: widget.style.copyWith(
-            color: widget.style.color,
+          style: _contentStyle.copyWith(
+            color: _contentStyle.color,
             fontWeight: FontWeight.bold,
           ),
         );
@@ -1080,9 +1115,9 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     // Container padding'leri ile senkronize olmalı (selectable_text_with_addnote.dart)
     // Increased reserved space to prevent text from being cut off at bottom
-    double containerPadding = 24.h;
-    double chapterHeaderSpace = 20.h;
-    double bottomSafeArea = 16.h; // Extra space for bottom navigation area
+    double containerPadding = _isFrontMatter ? 14.h : 24.h;
+    double chapterHeaderSpace = _isFrontMatter ? 8.h : 20.h;
+    double bottomSafeArea = _isFrontMatter ? 8.h : 16.h; // Extra space for bottom navigation area
 
     double reservedSpace = containerPadding + chapterHeaderSpace + bottomSafeArea;
 
@@ -1119,8 +1154,9 @@ class _PagingWidgetState extends State<PagingWidget> {
     double pageRatio = totalContentHeight / maxHeight;
     int estimatedPages = pageRatio.ceil();
 
-    // AGGRESSIVE: If content fits in 1 page (with 50% overflow allowed), force single page
-    if (pageRatio <= 1.5) {
+    // AGGRESSIVE: If content fits in 1 page (with extra overflow allowed for front matter), force single page
+    final singlePageThreshold = _isFrontMatter ? 2.4 : 1.5;
+    if (pageRatio <= singlePageThreshold) {
       List<InlineSpan> allSpansForPage = List.from(flatSpans);
       _pageSpans.add(TextSpan(children: allSpansForPage));
       _finalizePages();
@@ -1229,7 +1265,7 @@ class _PagingWidgetState extends State<PagingWidget> {
       return BookPageBuilder.buildBookPageSpan(
         context: context,
         contentSpan: contentSpan,
-        style: widget.style,
+        style: _contentStyle,
         textDirection: RTLHelper.getTextDirection(widget.textContent),
         bookId: widget.bookId,
         onTextTap: widget.onTextTap,
