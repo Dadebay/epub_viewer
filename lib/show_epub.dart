@@ -124,6 +124,7 @@ class ShowEpubState extends State<ShowEpub> {
   bool _isChangingTheme = false;
   bool _isLoadingChapter = false;
   bool _isProgressBarLongPressed = false;
+  bool _isBackgroundCalcRunning = false;
   late EpubPaginationHelper _paginationHelper;
   int? _pendingCurrentPageInBook;
   int? _pendingTotalPages;
@@ -215,7 +216,7 @@ class ShowEpubState extends State<ShowEpub> {
     } else if (startPage > 0) {
       await bookProgress.setCurrentPageIndex(bookId, startPage);
     }
-
+    final isCalculatingUi = isCalculatingTotalPages;
     setState(() {
       loadChapterFuture = loadChapter(init: init, index: targetIndex).then((_) => _isLoadingChapter = false).catchError((e, _) => _isLoadingChapter = false);
     });
@@ -319,13 +320,18 @@ class ShowEpubState extends State<ShowEpub> {
     // Save current total from controller (most accurate source) before clearing
     final oldTotal = controllerPaging.totalPages.value > 0 ? controllerPaging.totalPages.value : (totalPagesInBook > 0 ? totalPagesInBook : chapterPageCounts.values.fold(0, (s, c) => s + c));
     _preservedTotalPages = oldTotal; // Preserve for display during recalculation
-    chapterPageCounts.clear();
-    _cachedKnownPagesTotal = 0;
+    // Keep existing counts as a fallback so TOC can still show start pages
+    // but mark them as stale until recalculated.
+    _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (s, c) => s + c);
     totalPagesInBook = oldTotal; // Keep old total until fully recalculated
     allChaptersCalculated.value = false;
+    isCalculatingTotalPages = true;
     _currentChapterPageCount = 0;
     accumulatedPagesBeforeCurrentChapter = 0;
     gs.remove('book_${bookId}_page_counts');
+
+    // Kick off background calculation so loading can finish
+    _startBackgroundCalculation();
   }
 
   void changeFontSize(double newSize) {
@@ -358,7 +364,7 @@ class ShowEpubState extends State<ShowEpub> {
       totalPages: bookTotalPages,
       currentPageInChapter: currentPageInBook, // Show page in book, not in chapter
       currentSubchapterTitle: _currentSubchapterTitle,
-      isCalculating: !allChaptersCalculated.value,
+      isCalculating: isCalculatingTotalPages,
     );
     if (result == null) return;
 
@@ -494,10 +500,16 @@ class ShowEpubState extends State<ShowEpub> {
       // Check if all chapters are now calculated
       if (chapterPageCounts.length == _chapters.length) {
         allChaptersCalculated.value = true;
+        isCalculatingTotalPages = false;
       }
 
       _saveCachedPageCounts();
       _updateChapterPageNumbers();
+    }
+
+    // We have a valid page count for the current chapter, stop showing loading
+    if (allChaptersCalculated.value) {
+      isCalculatingTotalPages = false;
     }
 
     // Calculate current page in book
@@ -640,6 +652,7 @@ class ShowEpubState extends State<ShowEpub> {
     _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
     totalPagesInBook = _cachedKnownPagesTotal;
     allChaptersCalculated.value = chapterPageCounts.length == _chapters.length;
+    isCalculatingTotalPages = !allChaptersCalculated.value;
 
     // If we have complete cache, use it
     if (allChaptersCalculated.value && totalPagesInBook > 0) {
@@ -652,6 +665,10 @@ class ShowEpubState extends State<ShowEpub> {
 
   void _startBackgroundCalculation() async {
     if (!mounted) return;
+    if (_isBackgroundCalcRunning) return;
+
+    _isBackgroundCalcRunning = true;
+    isCalculatingTotalPages = true;
 
     final results = await EpubBackgroundCalculator.calculateAllChaptersInBackground(
       chapters: _chapters,
@@ -690,6 +707,9 @@ class ShowEpubState extends State<ShowEpub> {
     }
 
     _updateChapterPageNumbers();
+
+    _isBackgroundCalcRunning = false;
+    isCalculatingTotalPages = !allChaptersCalculated.value && _isBackgroundCalcRunning;
   }
 
   void _saveCachedPageCounts() {
@@ -807,9 +827,10 @@ class ShowEpubState extends State<ShowEpub> {
 
     // During recalculation, use preserved totalPagesInBook instead of partial calculation
     // If we have a pending total (from jump), use it; otherwise use calculated
+    final preservedTotal = _preservedTotalPages > 0 ? _preservedTotalPages : null;
     final displayTotal = _isJumpLockActive
-        ? (_jumpLockedTotalPages ?? _pendingTotalPages ?? (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal)))
-        : (_pendingTotalPages ?? (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal)));
+      ? (_jumpLockedTotalPages ?? _pendingTotalPages ?? (isCalculatingTotalPages ? (preservedTotal ?? bookTotal) : (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal))))
+      : (_pendingTotalPages ?? (isCalculatingTotalPages ? (preservedTotal ?? bookTotal) : (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal))));
     final shouldUpdate = _isJumpLockActive || _pendingTotalPages != null || allChaptersCalculated.value || currentTotal == 0 || (displayTotal > currentTotal && (displayTotal - currentTotal) > 5);
 
     if (shouldUpdate) {
@@ -845,6 +866,7 @@ class ShowEpubState extends State<ShowEpub> {
       final currentChapterTitle = currentChapterIdx >= 0 && currentChapterIdx < chaptersList.length ? chaptersList[currentChapterIdx].chapter : '';
       final originalChapterIdx = _filteredToOriginalIndex[currentChapterIdx] ?? currentChapterIdx;
       final isCurrentChapterCalculated = chapterPageCounts.containsKey(originalChapterIdx);
+      final isCalculatingUi = isCalculatingTotalPages;
 
       return EpubBottomNavWidget(
         showHeader: showHeader,
@@ -852,7 +874,7 @@ class ShowEpubState extends State<ShowEpub> {
         backColor: backColor,
         currentPage: controllerPaging.currentPage.value,
         totalPages: controllerPaging.totalPages.value,
-        isCalculating: !isCurrentChapterCalculated || !allChaptersCalculated.value,
+        isCalculating: !isCurrentChapterCalculated || isCalculatingUi,
         chapterTitle: currentChapterTitle,
         onMenuPressed: openTableOfContents,
         onNextPage: () => controllerPaging.goToNextPage(),

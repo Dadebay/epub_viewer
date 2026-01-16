@@ -143,6 +143,24 @@ class _PagingWidgetState extends State<PagingWidget> {
   bool _isFrontMatter = false;
   late TextStyle _contentStyle;
 
+  bool _spanHasRealContent(InlineSpan span) {
+    if (span is WidgetSpan) return true;
+
+    if (span is TextSpan) {
+      final text = span.text ?? '';
+      if (text.replaceAll(RegExp(r'\s+'), '').isNotEmpty) {
+        return true;
+      }
+      if (span.children != null && span.children!.isNotEmpty) {
+        for (final child in span.children!) {
+          if (_spanHasRealContent(child)) return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   @override
   void didUpdateWidget(covariant PagingWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1255,6 +1273,13 @@ class _PagingWidgetState extends State<PagingWidget> {
 
   void _finalizePages() {
     final bottomNavHeight = widget.showNavBar ? 10.0 : 0.0;
+
+    // Remove leading empty pages so chapter jumps don't land on blank pages
+    if (_pageSpans.length > 1) {
+      while (_pageSpans.isNotEmpty && !_spanHasRealContent(_pageSpans.first)) {
+        _pageSpans.removeAt(0);
+      }
+    }
 
     pages = _pageSpans.asMap().entries.map((entry) {
       int index = entry.key;
