@@ -1,0 +1,88 @@
+// lib/translations/epub_translations.dart
+
+import 'package:cosmos_epub/cosmos_epub.dart';
+
+class CosmosEpubLocalization {
+  static const _texts = {
+    'tr': {
+      'themes': 'Tema sazlamalary',
+      'bold': 'Galyň',
+      'quiet': 'Sessiz',
+      'paper': 'Kagyz',
+      'calm': 'Asuda',
+      'focus': 'Üns',
+      'page': 'Sahypa',
+      'of': 'dan',
+      'book_description': 'Kitap beýany',
+      'contents': 'Mazmuny',
+      'add_to_shelf': 'Tekjä goş',
+      'remove_from_shelf': 'Tekjeden aýyr',
+      'save_to_my_books': 'Kitaplaryma goş',
+      'remove_from_my_books': 'Kitaplarymdan aýyr',
+      'add_note': 'Bellik goş',
+      'share': 'Paýlaş',
+      'note_added': 'Bellik goşuldy',
+      'sharing': 'Paýlaşylýar',
+      'copy': 'Nusga',
+      'end_of_book': 'Kitap gutardy',
+      'done': 'Bolýar',
+      'add_note_hint': 'Bellik ýaz...',
+      'note': 'Bellik',
+    },
+    'en': {
+      'themes': 'Themes',
+      'bold': 'Bold',
+      'quiet': 'Quiet',
+      'paper': 'Paper',
+      'calm': 'Calm',
+      'focus': 'Focus',
+      'page': 'Page',
+      'of': 'of',
+      'book_description': 'Book description',
+      'contents': 'Contents',
+      'add_to_shelf': 'Add to shelf',
+      'remove_from_shelf': 'Remove from shelf',
+      'save_to_my_books': 'Save to My Books',
+      'remove_from_my_books': 'Remove from My Books',
+      'add_note': 'Add Note',
+      'share': 'Share',
+      'note_added': 'Note added',
+      'sharing': 'Sharing',
+      'copy': 'Copy',
+      'end_of_book': 'End of book',
+      'done': 'Done',
+      'add_note_hint': 'Add a note...',
+      'note': 'Note',
+    },
+    'ru': {
+      'themes': 'Темы',
+      'bold': 'Жирный',
+      'quiet': 'Тихий',
+      'paper': 'Бумага',
+      'calm': 'Спокойный',
+      'focus': 'Фокус',
+      'page': 'Страница',
+      'of': 'из',
+      'book_description': 'Описание книги',
+      'contents': 'Содержание',
+      'add_to_shelf': 'Добавить на полку',
+      'remove_from_shelf': 'Удалить с полки',
+      'save_to_my_books': 'Сохранить в Мои книги',
+      'remove_from_my_books': 'Удалить из Моих книг',
+      'add_note': 'Добавить заметку',
+      'share': 'Поделиться',
+      'note_added': 'Заметка добавлена',
+      'sharing': 'Поделиться',
+      'copy': 'Копировать',
+      'end_of_book': 'Конец книги',
+      'done': 'Готово',
+      'add_note_hint': 'Добавить заметку...',
+      'note': 'Заметка',
+    },
+  };
+
+  static String t(String key) {
+    final lang = CosmosEpub.currentLocale.languageCode;
+    return _texts[lang]?[key] ?? _texts['tr']![key]!;
+  }
+}
