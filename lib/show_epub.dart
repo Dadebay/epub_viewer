@@ -127,6 +127,11 @@ class ShowEpubState extends State<ShowEpub> {
   late EpubPaginationHelper _paginationHelper;
   int? _pendingCurrentPageInBook;
   int? _pendingTotalPages;
+  bool _isJumpLockActive = false;
+  int? _jumpLockedPageInBook;
+  int? _jumpLockedTotalPages;
+  int? _jumpLockedChapterIndex;
+  int? _jumpLockedPageInChapter;
   int _preservedTotalPages = 0; // Preserved total during theme/font changes
   int? _targetChapterFromAudioSync;
   int? _targetPageFromAudioSync;
@@ -432,11 +437,43 @@ class ShowEpubState extends State<ShowEpub> {
 
   updateUI() => setState(() {});
 
+  void _setJumpLock({
+    required int pageInBook,
+    required int totalPages,
+    required int chapterIndex,
+    required int pageInChapter,
+  }) {
+    _isJumpLockActive = true;
+    _jumpLockedPageInBook = pageInBook;
+    _jumpLockedTotalPages = totalPages;
+    _jumpLockedChapterIndex = chapterIndex;
+    _jumpLockedPageInChapter = pageInChapter;
+    _pendingCurrentPageInBook = pageInBook;
+    _pendingTotalPages = totalPages;
+  }
+
+  void _clearJumpLock() {
+    _isJumpLockActive = false;
+    _jumpLockedPageInBook = null;
+    _jumpLockedTotalPages = null;
+    _jumpLockedChapterIndex = null;
+    _jumpLockedPageInChapter = null;
+    _pendingCurrentPageInBook = null;
+    _pendingTotalPages = null;
+  }
+
   /// Handle page flip callback from PagingWidget
   Future<void> _handlePageFlip(int currentPage, int totalPages) async {
     var currentChapterIdx = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     var originalChapterIdx = _filteredToOriginalIndex[currentChapterIdx] ?? currentChapterIdx;
     _currentChapterPageCount = totalPages;
+
+    if (_isJumpLockActive) {
+      final shouldClear = _jumpLockedChapterIndex != currentChapterIdx || _jumpLockedPageInChapter != currentPage;
+      if (shouldClear) {
+        _clearJumpLock();
+      }
+    }
 
     // Update cache with REAL page count from pagination
     int oldPageCount = chapterPageCounts[originalChapterIdx] ?? 0;
@@ -470,13 +507,15 @@ class ShowEpubState extends State<ShowEpub> {
     }
     int currentPageInBook = accumulatedBefore + currentPage + 1;
 
-    final effectiveCurrentPage = _pendingCurrentPageInBook ?? currentPageInBook;
+    final effectiveCurrentPage = _isJumpLockActive ? (_jumpLockedPageInBook ?? _pendingCurrentPageInBook ?? currentPageInBook) : (_pendingCurrentPageInBook ?? currentPageInBook);
 
     // Update controller values
     if (!_isChangingTheme) {
       controllerPaging.currentPage.value = effectiveCurrentPage;
-      // Use preserved total if still recalculating
-      final displayTotal = (_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook;
+      // Use locked total (during jump) or pending total, otherwise use preserved or calculated total
+      final displayTotal = _isJumpLockActive
+          ? (_jumpLockedTotalPages ?? _pendingTotalPages ?? ((_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook))
+          : (_pendingTotalPages ?? ((_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook));
       controllerPaging.totalPages.value = displayTotal;
     }
 
@@ -767,18 +806,22 @@ class ShowEpubState extends State<ShowEpub> {
     final currentTotal = controllerPaging.totalPages.value;
 
     // During recalculation, use preserved totalPagesInBook instead of partial calculation
-    final displayTotal = allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal);
-    final shouldUpdate = allChaptersCalculated.value || currentTotal == 0 || (displayTotal > currentTotal && (displayTotal - currentTotal) > 5);
+    // If we have a pending total (from jump), use it; otherwise use calculated
+    final displayTotal = _isJumpLockActive
+        ? (_jumpLockedTotalPages ?? _pendingTotalPages ?? (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal)))
+        : (_pendingTotalPages ?? (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal)));
+    final shouldUpdate = _isJumpLockActive || _pendingTotalPages != null || allChaptersCalculated.value || currentTotal == 0 || (displayTotal > currentTotal && (displayTotal - currentTotal) > 5);
 
     if (shouldUpdate) {
       controllerPaging.totalPages.value = displayTotal;
-    } else {}
-
-    if (_pendingCurrentPageInBook != null) {
-      controllerPaging.currentPage.value = _pendingCurrentPageInBook!;
-      _pendingCurrentPageInBook = null;
     }
-    if (_pendingTotalPages != null) _pendingTotalPages = null;
+
+    if (_pendingCurrentPageInBook != null || _jumpLockedPageInBook != null) {
+      controllerPaging.currentPage.value = _jumpLockedPageInBook ?? _pendingCurrentPageInBook!;
+      if (!_isJumpLockActive) _pendingCurrentPageInBook = null;
+    }
+    // Only clear pending total after it's been applied and not locked
+    if (_pendingTotalPages != null && !_isJumpLockActive) _pendingTotalPages = null;
   }
 
   /// Build header widget
@@ -817,10 +860,18 @@ class ShowEpubState extends State<ShowEpub> {
         onJumpToPage: (targetPageInBook) {
           debugPrint('\n📖 onJumpToPage callback:');
           debugPrint('   targetPageInBook: $targetPageInBook');
+          debugPrint('   current totalPages: ${controllerPaging.totalPages.value}');
           final result = _calculateChapterAndPageFromBookPage(targetPageInBook);
           debugPrint('   result: $result');
           if (result != null) {
             debugPrint('   ✅ Calling reLoadChapter(index: ${result['chapter']}, startPage: ${result['page']})');
+            // Preserve the target page and total pages so they're displayed after chapter loads
+            _setJumpLock(
+              pageInBook: targetPageInBook,
+              totalPages: controllerPaging.totalPages.value,
+              chapterIndex: result['chapter']!,
+              pageInChapter: result['page']!,
+            );
             reLoadChapter(index: result['chapter']!, startPage: result['page']!);
           } else {
             debugPrint('   ❌ result is null - not reloading chapter');
