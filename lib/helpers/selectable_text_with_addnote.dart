@@ -416,6 +416,47 @@ class BookPageBuilder {
     );
   }
 
+  /// Check if page content is primarily quote/poetry style (italic, centered)
+  /// If entire page is quote-like, it should be vertically centered
+  static bool _isQuoteOnlyPage(TextSpan contentSpan) {
+    final children = contentSpan.children;
+    if (children == null || children.isEmpty) return false;
+
+    int totalSpans = 0;
+    int quoteSpans = 0;
+
+    for (final span in children) {
+      if (span is TextSpan) {
+        final text = span.text ?? '';
+        // Skip empty or whitespace-only spans
+        if (text.trim().isEmpty) continue;
+
+        totalSpans++;
+
+        // Check if this span has italic style (typical for quotes)
+        if (span.style?.fontStyle == FontStyle.italic) {
+          quoteSpans++;
+        }
+      } else if (span is WidgetSpan) {
+        // WidgetSpans are often used for quote formatting
+        final widget = span.child;
+        if (widget is Container) {
+          // Check if container has centered alignment (quote style)
+          if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
+            quoteSpans++;
+          }
+        }
+        totalSpans++;
+      }
+    }
+
+    // If no content spans found, not a quote page
+    if (totalSpans == 0) return false;
+
+    // If more than 70% of content is quote-style, center the page
+    return quoteSpans / totalSpans > 0.7;
+  }
+
   // NEW METHOD: Build page with TextSpan (for mixed text + images)
   static Widget buildBookPageSpan({
     required BuildContext context,
@@ -432,6 +473,9 @@ class BookPageBuilder {
     double bottomNavHeight = 70.0,
   }) {
     final bgColor = backgroundColor ?? const Color(0xFFFFFFFF);
+
+    // Check if this page is quote-only (should be vertically centered)
+    final isQuoteOnlyPage = _isQuoteOnlyPage(contentSpan);
 
     return GestureDetector(
         onTap: onTextTap,
@@ -494,9 +538,10 @@ class BookPageBuilder {
                     ],
 
                     // Main content - fill remaining space completely
+                    // If quote-only page, center vertically; otherwise top-align
                     Expanded(
                       child: Container(
-                        alignment: Alignment.topLeft,
+                        alignment: isQuoteOnlyPage ? Alignment.center : Alignment.topLeft,
                         child: Selectable(
                           selectWordOnLongPress: true,
                           selectWordOnDoubleTap: true,

@@ -127,6 +127,7 @@ class ShowEpubState extends State<ShowEpub> {
   late EpubPaginationHelper _paginationHelper;
   int? _pendingCurrentPageInBook;
   int? _pendingTotalPages;
+  int _preservedTotalPages = 0; // Preserved total during theme/font changes
   int? _targetChapterFromAudioSync;
   int? _targetPageFromAudioSync;
 
@@ -318,6 +319,7 @@ class ShowEpubState extends State<ShowEpub> {
     // Save current total from controller (most accurate source) before clearing
     final oldTotal = controllerPaging.totalPages.value > 0 ? controllerPaging.totalPages.value : (totalPagesInBook > 0 ? totalPagesInBook : chapterPageCounts.values.fold(0, (s, c) => s + c));
     print('📦 Clearing cache - preserving oldTotal: $oldTotal');
+    _preservedTotalPages = oldTotal; // Preserve for display during recalculation
     chapterPageCounts.clear();
     _cachedKnownPagesTotal = 0;
     totalPagesInBook = oldTotal; // Keep old total until fully recalculated
@@ -460,7 +462,15 @@ class ShowEpubState extends State<ShowEpub> {
       int diff = totalPages - oldPageCount;
       chapterPageCounts[originalChapterIdx] = totalPages;
       _cachedKnownPagesTotal += diff;
-      totalPagesInBook = _cachedKnownPagesTotal;
+      // During recalculation, don't set totalPagesInBook lower than preserved value
+      if (_preservedTotalPages > 0 && _cachedKnownPagesTotal < _preservedTotalPages && !allChaptersCalculated) {
+        // Keep preserved total during partial recalculation
+        totalPagesInBook = _preservedTotalPages;
+      } else {
+        totalPagesInBook = _cachedKnownPagesTotal;
+        // Clear preserved when we have calculated all or exceeded it
+        if (allChaptersCalculated) _preservedTotalPages = 0;
+      }
 
       // Check if all chapters are now calculated
       if (chapterPageCounts.length == _chapters.length) {
@@ -483,7 +493,9 @@ class ShowEpubState extends State<ShowEpub> {
     // Update controller values
     if (!_isChangingTheme) {
       controllerPaging.currentPage.value = effectiveCurrentPage;
-      controllerPaging.totalPages.value = totalPagesInBook;
+      // Use preserved total if still recalculating
+      final displayTotal = (_preservedTotalPages > 0 && !allChaptersCalculated) ? _preservedTotalPages : totalPagesInBook;
+      controllerPaging.totalPages.value = displayTotal;
     }
 
     _updateSubchapterTitleForPage(currentChapterIdx, currentPage);
