@@ -137,15 +137,9 @@ class PageFlipWidgetState extends State<PageFlipWidget> with TickerProviderState
           widget.onPageFlip(pageNumber);
         } else if (_isLastPage) {
           // User tried to swipe forward on last page - trigger chapter change
-          debugPrint('📄 User swiped forward on last page');
-          debugPrint('   🎬 Starting animation: controller[$pageNumber].forward()');
-          debugPrint('   📊 Controller value BEFORE: ${_controllers[pageNumber].value}');
           await _controllers[pageNumber].forward();
-          debugPrint('   ✅ Animation completed! Controller value AFTER: ${_controllers[pageNumber].value}');
           widget.onPageFlip(pageNumber);
-          debugPrint('   📞 Calling onLastPageSwipe callback...');
           widget.onLastPageSwipe?.call();
-          debugPrint('   ✅ onLastPageSwipe callback completed');
         } else {
           if (!_isLastPage) {
             await _controllers[pageNumber].forward();

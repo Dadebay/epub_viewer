@@ -422,7 +422,7 @@ class BookPageBuilder {
     final children = contentSpan.children;
     if (children == null || children.isEmpty) return false;
 
-    int totalSpans = 0;
+    int totalMeaningfulSpans = 0;
     int quoteSpans = 0;
 
     for (final span in children) {
@@ -431,30 +431,300 @@ class BookPageBuilder {
         // Skip empty or whitespace-only spans
         if (text.trim().isEmpty) continue;
 
-        totalSpans++;
-
-        // Check if this span has italic style (typical for quotes)
-        if (span.style?.fontStyle == FontStyle.italic) {
-          quoteSpans++;
+        // Skip section dividers - they are neutral
+        if (_isSectionDivider(text)) {
+          continue;
         }
+
+        totalMeaningfulSpans++;
+        // TextSpans are regular content, not quotes
       } else if (span is WidgetSpan) {
-        // WidgetSpans are often used for quote formatting
         final widget = span.child;
+
+        // Skip SizedBox - they are just spacing, not content
+        if (widget is SizedBox) {
+          continue;
+        }
+
+        totalMeaningfulSpans++;
+
         if (widget is Container) {
           // Check if container has centered alignment (quote style)
           if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
             quoteSpans++;
           }
+          // Check margin - quotes often have left margin
+          else {
+            final margin = widget.margin;
+            if (margin is EdgeInsets && margin.left > 20) {
+              quoteSpans++;
+            }
+          }
         }
-        totalSpans++;
       }
     }
 
-    // If no content spans found, not a quote page
-    if (totalSpans == 0) return false;
+    // If no meaningful content spans found, not a quote page
+    if (totalMeaningfulSpans == 0) return false;
 
-    // If more than 70% of content is quote-style, center the page
-    return quoteSpans / totalSpans > 0.7;
+    // If more than 70% of meaningful content is quote-style, center the page
+    final isQuoteOnly = quoteSpans / totalMeaningfulSpans > 0.7;
+    return isQuoteOnly;
+  }
+
+  /// Helper method to check if a WidgetSpan represents a quote/poetry element
+  static bool _isQuoteWidgetSpan(WidgetSpan widgetSpan) {
+    final widget = widgetSpan.child;
+
+    if (widget is Container) {
+      // Check alignment
+      if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
+        return true;
+      }
+      // Check margin - quotes often have left margin
+      final margin = widget.margin;
+      if (margin is EdgeInsets && margin.left > 20) {
+        return true;
+      }
+    } else if (widget is SizedBox) {
+      // SizedBox alone is not a quote, but can be part of quote section
+      return false;
+    } else {}
+
+    return false;
+  }
+
+  /// Convert quote spans to be centered (change centerRight to center alignment)
+  static TextSpan _centerQuoteSpans(TextSpan contentSpan) {
+    final children = contentSpan.children;
+    if (children == null || children.isEmpty) {
+      return contentSpan;
+    }
+
+    List<InlineSpan> centeredChildren = [];
+    for (final span in children) {
+      if (span is WidgetSpan) {
+        final widget = span.child;
+        if (widget is Container) {
+          // Replace centerRight with center alignment and remove left margin
+          if (widget.alignment == Alignment.centerRight) {
+            centeredChildren.add(WidgetSpan(
+              alignment: span.alignment,
+              baseline: span.baseline,
+              child: Container(
+                width: widget.constraints?.maxWidth ?? double.infinity,
+                alignment: Alignment.center, // Center instead of centerRight
+                padding: widget.padding,
+                child: widget.child,
+              ),
+            ));
+            continue;
+          }
+        }
+        centeredChildren.add(span);
+      } else {
+        centeredChildren.add(span);
+      }
+    }
+
+    return TextSpan(children: centeredChildren, style: contentSpan.style);
+  }
+
+  /// Check if text is a section divider (like "* * *", "***", "---", Roman numerals, etc.)
+  static bool _isSectionDivider(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+
+    // Common section divider patterns
+    if (trimmed == '* * *' ||
+        trimmed == '***' ||
+        trimmed == '---' ||
+        trimmed == '* * * *' ||
+        trimmed == '----' ||
+        trimmed == '————' ||
+        trimmed == '***' ||
+        trimmed == '• • •' ||
+        trimmed == '...' ||
+        RegExp(r'^[\*\-•\.—–\s]+$').hasMatch(trimmed)) {
+      return true;
+    }
+
+    // Roman numerals (I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII, etc.)
+    // Supports uppercase and lowercase, with optional period or parenthesis
+    if (RegExp(r'^[IVXLCDM]+\.?$', caseSensitive: false).hasMatch(trimmed) ||
+        RegExp(r'^\([IVXLCDM]+\)$', caseSensitive: false).hasMatch(trimmed) ||
+        RegExp(r'^[IVXLCDM]+\)$', caseSensitive: false).hasMatch(trimmed)) {
+      return true;
+    }
+
+    // Arabic numerals as section dividers (1, 2, 3, etc. or 1., 2., 3., etc.)
+    if (RegExp(r'^\d+\.?$').hasMatch(trimmed) || RegExp(r'^\(\d+\)$').hasMatch(trimmed) || RegExp(r'^\d+\)$').hasMatch(trimmed)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Check if page has regular text followed by a quote at the end
+  /// Returns split info: (hasTextThenQuote, regularContentSpans, quoteContentSpans)
+  static ({bool hasTextThenQuote, List<InlineSpan> regularContent, List<InlineSpan> quoteContent}) _analyzePageContent(TextSpan contentSpan) {
+    final children = contentSpan.children;
+    if (children == null || children.isEmpty) {
+      return (hasTextThenQuote: false, regularContent: [], quoteContent: []);
+    }
+
+    // Debug: Print all spans
+    for (int i = 0; i < children.length; i++) {
+      final span = children[i];
+      if (span is WidgetSpan) {
+      } else if (span is TextSpan) {
+        final text = span.text ?? '';
+        final hasChildren = span.children?.isNotEmpty ?? false;
+        final isItalic = span.style?.fontStyle == FontStyle.italic;
+        final isDivider = _isSectionDivider(text);
+      }
+    }
+
+    // Find quote spans from the end
+    int quoteStartIndex = -1;
+    int lastNonEmptyIndex = -1;
+
+    // First, find the last non-empty span (excluding section dividers)
+    for (int i = children.length - 1; i >= 0; i--) {
+      final span = children[i];
+      if (span is WidgetSpan) {
+        if (span.child is! SizedBox) {
+          lastNonEmptyIndex = i;
+          break;
+        }
+      } else if (span is TextSpan) {
+        final text = span.text ?? '';
+        // Skip section dividers like "* * *"
+        if (_isSectionDivider(text)) {
+          continue;
+        }
+        if (text.trim().isNotEmpty || (span.children?.isNotEmpty ?? false)) {
+          lastNonEmptyIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (lastNonEmptyIndex < 0) {
+      return (hasTextThenQuote: false, regularContent: [], quoteContent: []);
+    }
+
+    // Now check from the last non-empty span backwards to find quote section
+    bool inQuoteSection = false;
+
+    for (int i = lastNonEmptyIndex; i >= 0; i--) {
+      final span = children[i];
+      bool isQuote = false;
+
+      if (span is WidgetSpan) {
+        // SizedBox is neutral - include in quote section if we're in one
+        if (span.child is SizedBox) {
+          if (inQuoteSection) {
+            continue; // Include SizedBox in quote section
+          } else {
+            continue; // Skip SizedBox before finding quote
+          }
+        }
+        isQuote = _isQuoteWidgetSpan(span);
+      } else if (span is TextSpan) {
+        final text = span.text ?? '';
+
+        // Section dividers are neutral - include in quote section if we're in one
+        if (_isSectionDivider(text)) {
+          if (inQuoteSection) {
+            continue;
+          } else {
+            continue;
+          }
+        }
+
+        // Skip whitespace-only spans
+        if (text.trim().isEmpty && (span.children == null || span.children!.isEmpty)) {
+          if (inQuoteSection) {
+            continue;
+          } else {
+            continue;
+          }
+        }
+        // TextSpan is regular content, not quote
+        isQuote = false;
+      }
+
+      if (isQuote) {
+        inQuoteSection = true;
+        quoteStartIndex = i;
+      } else if (inQuoteSection) {
+        // Found non-quote content - this is the split point
+        break;
+      }
+    }
+
+    // Must have found quote section and have content before it
+    if (quoteStartIndex <= 0) {
+      return (hasTextThenQuote: false, regularContent: [], quoteContent: []);
+    }
+
+    // Check if there's meaningful regular (non-quote, non-divider) content before the quote
+    bool hasRegularContent = false;
+    for (int i = 0; i < quoteStartIndex; i++) {
+      final span = children[i];
+      if (span is TextSpan) {
+        final text = span.text ?? '';
+
+        // Skip section dividers
+        if (_isSectionDivider(text)) {
+          continue;
+        }
+
+        // Check direct text - must be substantial (more than just punctuation/short)
+        if (text.trim().isNotEmpty && text.trim().length > 10) {
+          hasRegularContent = true;
+          break;
+        }
+        // Check nested children
+        if (span.children != null) {
+          for (var child in span.children!) {
+            if (child is TextSpan) {
+              final childText = child.text ?? '';
+              if (childText.trim().isNotEmpty && childText.trim().length > 10 && !_isSectionDivider(childText)) {
+                hasRegularContent = true;
+                break;
+              }
+            }
+          }
+          if (hasRegularContent) break;
+        }
+      } else if (span is WidgetSpan) {
+        // WidgetSpan with non-quote content (but NOT quote containers)
+        if (!_isQuoteWidgetSpan(span) && span.child is! SizedBox) {
+          // Check if this is a paragraph container (not a quote)
+          final widget = span.child;
+          if (widget is Container) {
+            // If container has centerRight alignment, it's a quote, skip it
+            if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
+              continue;
+            }
+          }
+          hasRegularContent = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasRegularContent) {
+      return (hasTextThenQuote: false, regularContent: [], quoteContent: []);
+    }
+
+    // Split content
+    final regularContent = children.sublist(0, quoteStartIndex).cast<InlineSpan>().toList();
+    final quoteContent = children.sublist(quoteStartIndex).cast<InlineSpan>().toList();
+
+    return (hasTextThenQuote: true, regularContent: regularContent, quoteContent: quoteContent);
   }
 
   // NEW METHOD: Build page with TextSpan (for mixed text + images)
@@ -477,6 +747,10 @@ class BookPageBuilder {
     // Check if this page is quote-only (should be vertically centered)
     final isQuoteOnlyPage = _isQuoteOnlyPage(contentSpan);
 
+    // Check if page has regular text followed by a quote at the end
+    final pageAnalysis = _analyzePageContent(contentSpan);
+    final hasTextThenQuote = pageAnalysis.hasTextThenQuote;
+
     return GestureDetector(
         onTap: onTextTap,
         behavior: HitTestBehavior.translucent,
@@ -498,6 +772,80 @@ class BookPageBuilder {
             textDirection: textDirection,
             child: LayoutBuilder(
               builder: (context, constraints) {
+                // If page has text followed by quote, create split layout
+                if (hasTextThenQuote) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      // Chapter title header on ALL pages
+                      if (chapterTitle != null) ...[
+                        if (isFirstPage) ...[
+                          SizedBox(height: 4.h),
+                          Text(
+                            chapterTitle,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: style.copyWith(
+                              fontSize: (style.fontSize ?? 16) + 2,
+                              fontWeight: FontWeight.w500,
+                              height: 1.1,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                          SizedBox(height: 6.h),
+                        ] else ...[
+                          SizedBox(height: 2.h),
+                          Text(
+                            chapterTitle,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: style.copyWith(
+                              fontSize: (style.fontSize ?? 16) - 2,
+                              fontWeight: FontWeight.w400,
+                              height: 1.0,
+                              color: (style.color ?? Colors.black).withValues(alpha: 0.5),
+                            ),
+                          ),
+                          SizedBox(height: 4.h),
+                        ],
+                      ],
+
+                      // Regular text content at top
+                      Selectable(
+                        selectWordOnLongPress: true,
+                        selectWordOnDoubleTap: true,
+                        selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
+                        popupMenuItems: _buildPopupMenuItems(context, bookId),
+                        child: RichText(
+                          textAlign: TextAlign.left,
+                          text: TextSpan(children: pageAnalysis.regularContent),
+                        ),
+                      ),
+
+                      // Quote content centered in remaining space
+                      Expanded(
+                        child: Container(
+                          alignment: Alignment.center,
+                          child: Selectable(
+                            selectWordOnLongPress: true,
+                            selectWordOnDoubleTap: true,
+                            selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
+                            popupMenuItems: _buildPopupMenuItems(context, bookId),
+                            child: RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(children: pageAnalysis.quoteContent),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                // Standard layout for other pages
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.max,
@@ -546,52 +894,27 @@ class BookPageBuilder {
                           selectWordOnLongPress: true,
                           selectWordOnDoubleTap: true,
                           selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
-                          popupMenuItems: [
-                            SelectableMenuItem(
-                              title: CosmosEpubLocalization.t('add_note'),
-                              isEnabled: (controller) => controller!.isTextSelected,
-                              handler: (controller) {
-                                final selectedText = controller!.getSelection()!.text!;
-                                _handleAddNoteFromSpan(context, bookId, selectedText);
-                                return true;
-                              },
-                            ),
-                            SelectableMenuItem(
-                              title: CosmosEpubLocalization.t('share'),
-                              isEnabled: (controller) => controller!.isTextSelected,
-                              handler: (controller) {
-                                final selectedText = controller!.getSelection()!.text!;
-
-                                final box = context.findRenderObject() as RenderBox?;
-                                if (box == null) return true;
-
-                                final position = box.localToGlobal(Offset.zero) & box.size;
-
-                                SharePlus.instance.share(
-                                  ShareParams(
-                                    text: selectedText,
-                                    sharePositionOrigin: position,
+                          popupMenuItems: _buildPopupMenuItems(context, bookId),
+                          // For quote-only pages, don't force full height - let alignment work
+                          child: isQuoteOnlyPage
+                              ? SizedBox(
+                                  width: double.infinity,
+                                  child: RichText(
+                                    textAlign: TextAlign.center,
+                                    text: _centerQuoteSpans(contentSpan),
                                   ),
-                                );
-                                return true;
-                              },
-                            ),
-                            SelectableMenuItem(
-                              type: SelectableMenuItemType.copy,
-                              title: CosmosEpubLocalization.t('copy'),
-                            ),
-                          ],
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              return Container(
-                                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                                child: RichText(
-                                  textAlign: TextAlign.left,
-                                  text: contentSpan,
+                                )
+                              : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    return Container(
+                                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                                      child: RichText(
+                                        textAlign: TextAlign.left,
+                                        text: contentSpan,
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
                         ),
                       ),
                     ),
@@ -602,6 +925,45 @@ class BookPageBuilder {
             ),
           ),
         ));
+  }
+
+  /// Build popup menu items for text selection
+  static List<SelectableMenuItem> _buildPopupMenuItems(BuildContext context, String bookId) {
+    return [
+      SelectableMenuItem(
+        title: CosmosEpubLocalization.t('add_note'),
+        isEnabled: (controller) => controller!.isTextSelected,
+        handler: (controller) {
+          final selectedText = controller!.getSelection()!.text!;
+          _handleAddNoteFromSpan(context, bookId, selectedText);
+          return true;
+        },
+      ),
+      SelectableMenuItem(
+        title: CosmosEpubLocalization.t('share'),
+        isEnabled: (controller) => controller!.isTextSelected,
+        handler: (controller) {
+          final selectedText = controller!.getSelection()!.text!;
+
+          final box = context.findRenderObject() as RenderBox?;
+          if (box == null) return true;
+
+          final position = box.localToGlobal(Offset.zero) & box.size;
+
+          SharePlus.instance.share(
+            ShareParams(
+              text: selectedText,
+              sharePositionOrigin: position,
+            ),
+          );
+          return true;
+        },
+      ),
+      SelectableMenuItem(
+        type: SelectableMenuItemType.copy,
+        title: CosmosEpubLocalization.t('copy'),
+      ),
+    ];
   }
 
   static Future<void> _handleAddNoteFromSpan(BuildContext context, String bookId, String selectedText) async {

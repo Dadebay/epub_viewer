@@ -27,29 +27,40 @@ class EpubPaginationHelper {
     int targetPageInBook,
     Map<int, int> chapterPageCounts,
   ) {
+    debugPrint('\n🔍 calculateChapterAndPageFromBookPage:');
+    debugPrint('   targetPageInBook: $targetPageInBook');
+    debugPrint('   chapterPageCounts: $chapterPageCounts');
+    debugPrint('   _chapters.length: ${_chapters.length}');
+
     if (chapterPageCounts.isEmpty) {
+      debugPrint('   ❌ chapterPageCounts is empty - returning null');
       return null;
     }
 
     int accumulatedPages = 0;
     for (int chapterIndex = 0; chapterIndex < _chapters.length; chapterIndex++) {
       if (!chapterPageCounts.containsKey(chapterIndex)) {
+        debugPrint('   ⚠️ Chapter $chapterIndex not in chapterPageCounts - returning null');
         return null;
       }
 
       int pagesInChapter = chapterPageCounts[chapterIndex]!;
       int nextAccumulated = accumulatedPages + pagesInChapter;
 
+      debugPrint('   Chapter $chapterIndex: accumulated=$accumulatedPages, pagesInChapter=$pagesInChapter, nextAccumulated=$nextAccumulated');
+
       // Check if target page is in this chapter
       if (targetPageInBook >= accumulatedPages && targetPageInBook < nextAccumulated) {
         int pageInChapter = targetPageInBook - accumulatedPages;
 
+        debugPrint('   ✅ FOUND! Chapter: $chapterIndex, Page in chapter: $pageInChapter');
         return {'chapter': chapterIndex, 'page': pageInChapter};
       }
 
       accumulatedPages = nextAccumulated;
     }
 
+    debugPrint('   ❌ Target page not found in any chapter - returning null');
     return null;
   }
 

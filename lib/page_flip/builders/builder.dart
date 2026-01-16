@@ -50,9 +50,7 @@ class PageFlipBuilderState extends State<PageFlipBuilder> {
           });
         }
       }
-    } catch (e) {
-      print('Ignore this error: $e');
-    }
+    } catch (e) {}
   }
 
   @override

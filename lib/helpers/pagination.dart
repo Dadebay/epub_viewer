@@ -203,6 +203,49 @@ class _PagingWidgetState extends State<PagingWidget> {
     return buffer.toString();
   }
 
+  /// Check if text is a section divider (Roman numerals, "* * *", numbers, etc.)
+  bool _isSectionDividerText(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+
+    // Must be reasonably short (section dividers are typically short)
+    // Increased limit for multiple Roman numerals like "XXXIX. XL. XLI"
+    if (trimmed.length > 50) return false;
+
+    // Common section divider patterns
+    if (trimmed == '* * *' ||
+        trimmed == '***' ||
+        trimmed == '---' ||
+        trimmed == '* * * *' ||
+        trimmed == '----' ||
+        trimmed == '————' ||
+        trimmed == '• • •' ||
+        trimmed == '...' ||
+        RegExp(r'^[\*\-•\.—–\s]+$').hasMatch(trimmed)) {
+      return true;
+    }
+
+    // Single Roman numeral (I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII, XXXVIII, etc.)
+    if (RegExp(r'^[IVXLCDM]+\.?$', caseSensitive: false).hasMatch(trimmed) ||
+        RegExp(r'^\([IVXLCDM]+\)$', caseSensitive: false).hasMatch(trimmed) ||
+        RegExp(r'^[IVXLCDM]+\)$', caseSensitive: false).hasMatch(trimmed)) {
+      return true;
+    }
+
+    // Multiple Roman numerals separated by dots, spaces, or commas
+    // Examples: "XXXIX. XL. XLI", "I II III", "X, XI, XII"
+    if (RegExp(r'^[IVXLCDM]+[\.\s,]+[IVXLCDM\.\s,]+$', caseSensitive: false).hasMatch(trimmed)) {
+      return true;
+    }
+
+    // Arabic numerals as section dividers (1, 2, 3, etc. or 1., 2., 3., etc.)
+    if (RegExp(r'^\d+\.?$').hasMatch(trimmed) || RegExp(r'^\(\d+\)$').hasMatch(trimmed) || RegExp(r'^\d+\)$').hasMatch(trimmed)) {
+      return true;
+    }
+
+    return false;
+  }
+
   /// Check if element contains poetry/verse
   /// Poetry characteristics:
   /// - Multiple <br> tags (line breaks) OR
@@ -470,6 +513,32 @@ class _PagingWidgetState extends State<PagingWidget> {
             ),
           );
         } else {
+          // Check if this paragraph is a section divider (Roman numerals, "* * *", etc.)
+          final paragraphText = node.text.trim();
+          final isSectionDivider = _isSectionDividerText(paragraphText);
+
+          if (isSectionDivider) {
+            // Center section dividers (Roman numerals, "* * *", etc.)
+            return WidgetSpan(
+              alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic,
+              child: Container(
+                width: maxWidth,
+                padding: EdgeInsets.symmetric(vertical: 8.h),
+                alignment: Alignment.center,
+                child: Text(
+                  paragraphText,
+                  textAlign: TextAlign.center,
+                  style: widget.style.copyWith(
+                    color: widget.style.color,
+                    fontFamily: 'SFPro',
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            );
+          }
+
           // For prose, use regular indented paragraph
           List<InlineSpan> children = [];
 
@@ -506,7 +575,7 @@ class _PagingWidgetState extends State<PagingWidget> {
             color: widget.style.color,
             fontSize: (widget.style.fontSize ?? 16) + 4,
             fontWeight: FontWeight.w500,
-            fontStyle: FontStyle.italic,
+            fontStyle: FontStyle.normal,
             height: 1.5,
           ),
         );
@@ -572,7 +641,7 @@ class _PagingWidgetState extends State<PagingWidget> {
           child: SizedBox(height: 20.h),
         ));
 
-        // Add quote text (Apple Books style: centered, italic, elegant)
+        // Add quote text (Apple Books style: centered, elegant)
         spans.add(WidgetSpan(
           alignment: PlaceholderAlignment.baseline,
           baseline: TextBaseline.alphabetic,
@@ -586,7 +655,7 @@ class _PagingWidgetState extends State<PagingWidget> {
               textAlign: TextAlign.left,
               style: widget.style.copyWith(
                 color: widget.style.color,
-                fontStyle: FontStyle.italic,
+                fontStyle: FontStyle.normal,
                 fontSize: widget.style.fontSize! - 2,
                 fontWeight: FontWeight.w400,
               ),
@@ -594,7 +663,7 @@ class _PagingWidgetState extends State<PagingWidget> {
           ),
         ));
 
-        // Add author name if found (Apple Books style: centered, italic)
+        // Add author name if found (Apple Books style: centered)
         if (authorName != null && authorName.isNotEmpty) {
           spans.add(WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
@@ -607,7 +676,7 @@ class _PagingWidgetState extends State<PagingWidget> {
                 textAlign: TextAlign.center,
                 style: widget.style.copyWith(
                   color: widget.style.color,
-                  fontStyle: FontStyle.italic,
+                  fontStyle: FontStyle.normal,
                   fontWeight: FontWeight.bold,
                   fontSize: widget.style.fontSize! * 0.95,
                   letterSpacing: 0.2,
@@ -712,7 +781,7 @@ class _PagingWidgetState extends State<PagingWidget> {
                 textAlign: TextAlign.center,
                 style: widget.style.copyWith(
                   color: widget.style.color,
-                  fontStyle: FontStyle.italic,
+                  fontStyle: FontStyle.normal,
                   height: 1.5,
                   fontSize: widget.style.fontSize,
                 ),
@@ -756,7 +825,7 @@ class _PagingWidgetState extends State<PagingWidget> {
           children: children,
           style: widget.style.copyWith(
             color: widget.style.color,
-            fontStyle: FontStyle.italic,
+            fontStyle: FontStyle.normal,
           ),
         );
       } else if (node.localName == 'strong' || node.localName == 'b') {
@@ -1050,11 +1119,6 @@ class _PagingWidgetState extends State<PagingWidget> {
     double pageRatio = totalContentHeight / maxHeight;
     int estimatedPages = pageRatio.ceil();
 
-    print('📊 [PAGINATION] totalContentHeight: $totalContentHeight');
-    print('📊 [PAGINATION] maxHeight: $maxHeight');
-    print('📊 [PAGINATION] pageRatio: $pageRatio');
-    print('📊 [PAGINATION] estimatedPages: $estimatedPages');
-
     // AGGRESSIVE: If content fits in 1 page (with 50% overflow allowed), force single page
     if (pageRatio <= 1.5) {
       List<InlineSpan> allSpansForPage = List.from(flatSpans);
@@ -1072,9 +1136,6 @@ class _PagingWidgetState extends State<PagingWidget> {
     if (targetHeightPerPage > safeMaxHeight) {
       targetHeightPerPage = safeMaxHeight;
     }
-
-    print('📊 [PAGINATION] targetHeightPerPage: $targetHeightPerPage');
-    print('📊 [PAGINATION] safeMaxHeight: $safeMaxHeight');
 
     List<List<InlineSpan>> allPages = [];
     List<InlineSpan> currentPageList = [];
@@ -1113,11 +1174,6 @@ class _PagingWidgetState extends State<PagingWidget> {
     // Add remaining content as last page
     if (currentPageList.isNotEmpty) {
       allPages.add(currentPageList);
-    }
-
-    print('📊 [PAGINATION] Total pages created: ${allPages.length}');
-    for (int i = 0; i < allPages.length; i++) {
-      print('📊 [PAGINATION] Page ${i + 1}: ${allPages[i].length} spans');
     }
 
     // Convert to TextSpans
@@ -1302,7 +1358,6 @@ class _PagingWidgetState extends State<PagingWidget> {
                         // when user actually tries to swipe beyond last page
                       },
                       onLastPageSwipe: () {
-                        debugPrint('📄 onLastPageSwipe triggered - calling widget.onLastPage');
                         widget.onLastPage(_currentPageIndex, pages.length);
                       },
                       backgroundColor: widget.style.backgroundColor ?? const Color(0xFFFFFFFF),

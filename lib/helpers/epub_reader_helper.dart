@@ -30,7 +30,6 @@ class EpubReaderHelper {
     // Update cache when page count changes (either increase or decrease)
     // This handles font size/theme changes that affect pagination
     if (pageCountChanged) {
-      print('📝 Updating chapterPageCounts[$originalChapterIdx]: $oldPageCount -> $totalPages');
       int newCachedTotal = cachedKnownPagesTotal - oldPageCount + totalPages;
       setCachedKnownPagesTotal(newCachedTotal);
       chapterPageCounts[originalChapterIdx] = totalPages;

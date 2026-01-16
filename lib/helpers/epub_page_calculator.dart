@@ -6,14 +6,10 @@ class EpubPageCalculator {
     int beforeChapterIndex,
   ) {
     int accumulated = 0;
-    print('📊 calculateAccumulatedPages: beforeChapterIndex=$beforeChapterIndex');
-    print('   chapterPageCounts keys: ${chapterPageCounts.keys.toList()}');
     for (int i = 0; i < beforeChapterIndex; i++) {
       final pageCount = chapterPageCounts[i] ?? 0;
-      print('   chapter $i: $pageCount pages');
       accumulated += pageCount;
     }
-    print('   Total accumulated: $accumulated');
     return accumulated;
   }
 

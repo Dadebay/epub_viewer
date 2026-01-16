@@ -84,6 +84,7 @@ class _EpubBottomNavWidgetState extends State<EpubBottomNavWidget> {
               image,
               package: 'cosmos_epub',
               fit: BoxFit.contain,
+              color: widget.buttonIconColor,
               width: image == 'assets/images/font_logo.png' ? 24.sp : 15.sp,
               height: image == 'assets/images/font_logo.png' ? 24.sp : 15.sp,
             ),
