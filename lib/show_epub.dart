@@ -129,6 +129,7 @@ class ShowEpubState extends State<ShowEpub> {
   int? _pendingCurrentPageInBook;
   int? _pendingTotalPages;
   bool _isJumpLockActive = false;
+  int? _jumpLockedOffsetInBook;
   int? _jumpLockedPageInBook;
   int? _jumpLockedTotalPages;
   int? _jumpLockedChapterIndex;
@@ -450,6 +451,7 @@ class ShowEpubState extends State<ShowEpub> {
     required int pageInChapter,
   }) {
     _isJumpLockActive = true;
+    _jumpLockedOffsetInBook = pageInBook - pageInChapter;
     _jumpLockedPageInBook = pageInBook;
     _jumpLockedTotalPages = totalPages;
     _jumpLockedChapterIndex = chapterIndex;
@@ -458,8 +460,18 @@ class ShowEpubState extends State<ShowEpub> {
     _pendingTotalPages = totalPages;
   }
 
+  int _originalToFilteredIndex(int originalChapterIdx) {
+    for (final entry in _filteredToOriginalIndex.entries) {
+      if (entry.value == originalChapterIdx && !chaptersList[entry.key].isSubChapter) {
+        return entry.key;
+      }
+    }
+    return originalChapterIdx;
+  }
+
   void _clearJumpLock() {
     _isJumpLockActive = false;
+    _jumpLockedOffsetInBook = null;
     _jumpLockedPageInBook = null;
     _jumpLockedTotalPages = null;
     _jumpLockedChapterIndex = null;
@@ -475,8 +487,7 @@ class ShowEpubState extends State<ShowEpub> {
     _currentChapterPageCount = totalPages;
 
     if (_isJumpLockActive) {
-      final shouldClear = _jumpLockedChapterIndex != currentChapterIdx || _jumpLockedPageInChapter != currentPage;
-      if (shouldClear) {
+      if (_jumpLockedChapterIndex != currentChapterIdx) {
         _clearJumpLock();
       }
     }
@@ -518,16 +529,23 @@ class ShowEpubState extends State<ShowEpub> {
       accumulatedBefore += chapterPageCounts[i] ?? 0;
     }
     int currentPageInBook = accumulatedBefore + currentPage + 1;
+    if (_isJumpLockActive && _jumpLockedChapterIndex == currentChapterIdx && _jumpLockedOffsetInBook != null) {
+      currentPageInBook = _jumpLockedOffsetInBook! + currentPage + 1;
+    }
 
     final effectiveCurrentPage = _isJumpLockActive ? (_jumpLockedPageInBook ?? _pendingCurrentPageInBook ?? currentPageInBook) : (_pendingCurrentPageInBook ?? currentPageInBook);
 
     // Update controller values
     if (!_isChangingTheme) {
       controllerPaging.currentPage.value = effectiveCurrentPage;
-      // Use locked total (during jump) or pending total, otherwise use preserved or calculated total
+      // Use locked total (during jump) or pending total; keep preserved total during recalculation
+      final preservedTotal = _preservedTotalPages > 0 ? _preservedTotalPages : null;
       final displayTotal = _isJumpLockActive
-          ? (_jumpLockedTotalPages ?? _pendingTotalPages ?? ((_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook))
-          : (_pendingTotalPages ?? ((_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook));
+          ? (_jumpLockedTotalPages ??
+              _pendingTotalPages ??
+              (isCalculatingTotalPages ? (preservedTotal ?? totalPagesInBook) : ((_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook)))
+          : (_pendingTotalPages ??
+              (isCalculatingTotalPages ? (preservedTotal ?? totalPagesInBook) : ((_preservedTotalPages > 0 && !allChaptersCalculated.value) ? _preservedTotalPages : totalPagesInBook)));
       controllerPaging.totalPages.value = displayTotal;
     }
 
@@ -829,8 +847,10 @@ class ShowEpubState extends State<ShowEpub> {
     // If we have a pending total (from jump), use it; otherwise use calculated
     final preservedTotal = _preservedTotalPages > 0 ? _preservedTotalPages : null;
     final displayTotal = _isJumpLockActive
-      ? (_jumpLockedTotalPages ?? _pendingTotalPages ?? (isCalculatingTotalPages ? (preservedTotal ?? bookTotal) : (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal))))
-      : (_pendingTotalPages ?? (isCalculatingTotalPages ? (preservedTotal ?? bookTotal) : (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal))));
+        ? (_jumpLockedTotalPages ??
+            _pendingTotalPages ??
+            (isCalculatingTotalPages ? (preservedTotal ?? bookTotal) : (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal))))
+        : (_pendingTotalPages ?? (isCalculatingTotalPages ? (preservedTotal ?? bookTotal) : (allChaptersCalculated.value ? bookTotal : (totalPagesInBook > 0 ? totalPagesInBook : bookTotal))));
     final shouldUpdate = _isJumpLockActive || _pendingTotalPages != null || allChaptersCalculated.value || currentTotal == 0 || (displayTotal > currentTotal && (displayTotal - currentTotal) > 5);
 
     if (shouldUpdate) {
@@ -888,13 +908,14 @@ class ShowEpubState extends State<ShowEpub> {
           if (result != null) {
             debugPrint('   ✅ Calling reLoadChapter(index: ${result['chapter']}, startPage: ${result['page']})');
             // Preserve the target page and total pages so they're displayed after chapter loads
+            final filteredIndex = _originalToFilteredIndex(result['chapter']!);
             _setJumpLock(
               pageInBook: targetPageInBook,
               totalPages: controllerPaging.totalPages.value,
-              chapterIndex: result['chapter']!,
+              chapterIndex: filteredIndex,
               pageInChapter: result['page']!,
             );
-            reLoadChapter(index: result['chapter']!, startPage: result['page']!);
+            reLoadChapter(index: filteredIndex, startPage: result['page']!);
           } else {
             debugPrint('   ❌ result is null - not reloading chapter');
           }

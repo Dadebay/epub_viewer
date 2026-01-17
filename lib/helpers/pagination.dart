@@ -330,6 +330,15 @@ class _PagingWidgetState extends State<PagingWidget> {
     return false;
   }
 
+  bool _shouldCenterPoetry(List<String> lines) {
+    if (lines.isEmpty) return false;
+    final lengths = lines.map((l) => l.trim().length).where((l) => l > 0).toList();
+    if (lengths.isEmpty) return false;
+    final maxLen = lengths.reduce((a, b) => a > b ? a : b);
+    final avgLen = lengths.reduce((a, b) => a + b) / lengths.length;
+    return avgLen <= 50 && maxLen <= 80;
+  }
+
   bool _isFrontMatterContent(String rawText, String chapterTitle) {
     final cleaned = rawText.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (cleaned.isEmpty) return false;
@@ -468,6 +477,11 @@ class _PagingWidgetState extends State<PagingWidget> {
       // For prose, flatten all whitespace to single spaces
       if (!isPoetry) {
         text = text.replaceAll(RegExp(r'\s+'), ' ');
+        // Ensure a space after punctuation when missing (e.g., ";Word" -> "; Word")
+        text = text.replaceAllMapped(
+          RegExp(r'([\.,;:!?])([A-Za-z\u0400-\u04FF])'),
+          (match) => '${match.group(1)} ${match.group(2)}',
+        );
       }
 
       if (text.trim().isEmpty) {
@@ -543,6 +557,7 @@ class _PagingWidgetState extends State<PagingWidget> {
           }
 
           String poetryText = poetryLines.join('\n');
+          final centerPoetry = _shouldCenterPoetry(poetryLines);
 
           return WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
@@ -552,7 +567,7 @@ class _PagingWidgetState extends State<PagingWidget> {
               padding: EdgeInsets.only(bottom: _isFrontMatter ? 4.h : 8.h, top: _isFrontMatter ? 2.h : 4.h),
               child: Text(
                 poetryText,
-                textAlign: TextAlign.left,
+                textAlign: centerPoetry ? TextAlign.center : TextAlign.left,
                 style: _contentStyle.copyWith(
                   color: _contentStyle.color,
                   fontFamily: 'SFPro',
