@@ -205,7 +205,7 @@ class _PagingWidgetState extends State<PagingWidget> {
     });
   }
 
-  String _extractTextOnly(dom.Element element, {bool excludeCite = false}) {
+  String extractTextOnly(dom.Element element, {bool excludeCite = false}) {
     StringBuffer buffer = StringBuffer();
 
     for (var child in element.nodes) {
@@ -216,7 +216,7 @@ class _PagingWidgetState extends State<PagingWidget> {
           continue;
         }
 
-        buffer.write(_extractTextOnly(child, excludeCite: excludeCite));
+        buffer.write(extractTextOnly(child, excludeCite: excludeCite));
       }
     }
 
@@ -564,14 +564,14 @@ class _PagingWidgetState extends State<PagingWidget> {
             baseline: TextBaseline.alphabetic,
             child: Container(
               width: maxWidth,
-              padding: EdgeInsets.only(bottom: _isFrontMatter ? 4.h : 8.h, top: _isFrontMatter ? 2.h : 4.h),
+              padding: EdgeInsets.only(bottom: _isFrontMatter ? 4.h : 6.h, top: _isFrontMatter ? 2.h : 4.h),
               child: Text(
                 poetryText,
                 textAlign: centerPoetry ? TextAlign.center : TextAlign.left,
                 style: _contentStyle.copyWith(
                   color: _contentStyle.color,
                   fontFamily: 'SFPro',
-                  height: _isFrontMatter ? 1.3 : 1.6,
+                  height: _isFrontMatter ? 1.3 : 1.4,
                   letterSpacing: _isFrontMatter ? 0.0 : 0.1,
                   wordSpacing: _isFrontMatter ? 0.0 : 0.5,
                 ),
@@ -877,16 +877,35 @@ class _PagingWidgetState extends State<PagingWidget> {
               ),
             );
           }
-
           return WidgetSpan(
             alignment: PlaceholderAlignment.baseline,
             baseline: TextBaseline.alphabetic,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: quoteWidgets,
+            child: Container(
+              width: maxWidth,
+              padding: EdgeInsets.symmetric(
+                vertical: _isFrontMatter ? 6.h : 10.h, // Reduced from 12.h/20.h
+              ),
+              child: Text(
+                text,
+                textAlign: TextAlign.center,
+                style: _contentStyle.copyWith(
+                  color: _contentStyle.color,
+                  fontStyle: FontStyle.normal,
+                  height: 1.4, // Consistent line height
+                  fontSize: _contentStyle.fontSize,
+                ),
+              ),
             ),
           );
+          // return WidgetSpan(
+          //   alignment: PlaceholderAlignment.baseline,
+          //   baseline: TextBaseline.alphabetic,
+          //   child: Column(
+          //     crossAxisAlignment: CrossAxisAlignment.center,
+          //     mainAxisSize: MainAxisSize.min,
+          //     children: quoteWidgets,
+          //   ),
+          // );
         }
 
         return TextSpan(
@@ -1158,7 +1177,11 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     // FIRST PASS: Calculate total content height to see if it fits in one page
     double totalContentHeight = 0;
+    int totalChars = 0;
     for (var span in flatSpans) {
+      if (span is TextSpan && span.text != null) {
+        totalChars += span.text!.length;
+      }
       if (span is WidgetSpan) {
         try {
           TextPainter painter = TextPainter(
@@ -1188,8 +1211,13 @@ class _PagingWidgetState extends State<PagingWidget> {
     int estimatedPages = pageRatio.ceil();
 
     // AGGRESSIVE: If content fits in 1 page (with extra overflow allowed for front matter), force single page
-    final singlePageThreshold = _isFrontMatter ? 2.4 : 1.5;
-    if (pageRatio <= singlePageThreshold) {
+    // FIXED: Reduced threshold from 2.4/1.5 to 1.05.
+    // The previous high threshold was forcing 2+ pages of content into a single page,
+    // especially for content classified as "Front Matter" (threshold 2.4).
+    final singlePageThreshold = 1.0;
+    // CRITICAL FIX: Ensure we don't force single page if char count is too high!
+    // Must respect the absolute max limit (1050)
+    if (pageRatio <= singlePageThreshold && totalChars <= 1050) {
       List<InlineSpan> allSpansForPage = List.from(flatSpans);
       _pageSpans.add(TextSpan(children: allSpansForPage));
       _finalizePages();
@@ -1206,38 +1234,197 @@ class _PagingWidgetState extends State<PagingWidget> {
       targetHeightPerPage = safeMaxHeight;
     }
 
-    List<List<InlineSpan>> allPages = [];
-    List<InlineSpan> currentPageList = [];
-    double currentPageHeight = 0;
+    // Dynamic character limits based on font size AND screen size
+    // Base values for 13px font size (our reference point)
+    const double baseFontSize = 13.0;
+    const int baseMinChars = 800;
+    const int baseMaxChars = 1000;
+
+    // Calculate Screen Capacity Factor
+    // Reference content area (approx standard phone safe area: 350w x 600h)
+    const double referenceArea = 350.0 * 600.0; // ~210,000 sq pixels
+    final double currentArea = maxWidth * maxHeight;
+
+    double screenCapacityFactor = currentArea / referenceArea;
+
+    // Clamp factor to prevent extreme scaling (0.8x to 1.1x)
+    // This ensures we adjust for size but don't go crazy on tablets or tiny screens
+    // Reduced upper bound significantly to prevent "wall of text"
+    if (screenCapacityFactor < 0.8) screenCapacityFactor = 0.8;
+    if (screenCapacityFactor > 1.1) screenCapacityFactor = 1.1;
+
+    // Get current font size
+    final currentFontSize = _contentStyle.fontSize ?? baseFontSize;
+
+    // Calculate scaling factor (inverse relationship)
+    final fontScaleFactor = baseFontSize / currentFontSize;
+
+    // Calculate dynamic limits combining both factors
+    int minCharsPerPage = (baseMinChars * fontScaleFactor * screenCapacityFactor).round();
+    int maxCharsPerPage = (baseMaxChars * fontScaleFactor * screenCapacityFactor).round();
+
+    // Safety: Strictly limit chars per page to prevent overflow
+    // Hard cap at 1050 to ensure we never get 1600+ chars
+    int absoluteMax = 1050;
+    if (maxCharsPerPage > absoluteMax) maxCharsPerPage = absoluteMax;
+
+    // Ensure logical bounds
+    if (maxCharsPerPage < 500) maxCharsPerPage = 500;
+    if (minCharsPerPage > maxCharsPerPage) minCharsPerPage = maxCharsPerPage - 50;
+
+    // Log detailed font size and character count information
+    print('═══════════════════════════════════════════════════════');
+    print('📊 PAGINATION CHARACTER COUNT CALCULATION');
+    print('───────────────────────────────────────────────────────');
+    print('Total Content Characters: $totalChars');
+    print('Current Font Size: ${currentFontSize}px');
+    print('Scale Factor: ${fontScaleFactor.toStringAsFixed(2)}');
+    print('Screen Capacity Factor: ${screenCapacityFactor.toStringAsFixed(2)}');
+    print('Calculated Range: $minCharsPerPage - $maxCharsPerPage chars/page');
+    print('───────────────────────────────────────────────────────');
+    print('📐 CHARACTER COUNT EXAMPLES BY FONT SIZE:');
+    print('Font size 10px: ~${(baseMinChars * (baseFontSize / 10)).round()}-${(baseMaxChars * (baseFontSize / 10)).round()} characters per page');
+    print('Font size 11px: ~${(baseMinChars * (baseFontSize / 11)).round()}-${(baseMaxChars * (baseFontSize / 11)).round()} characters per page');
+    print('Font size 12px: ~${(baseMinChars * (baseFontSize / 12)).round()}-${(baseMaxChars * (baseFontSize / 12)).round()} characters per page');
+    print('Font size 13px: $baseMinChars-$baseMaxChars characters per page (BASE)');
+    print('Font size 14px: ~${(baseMinChars * (baseFontSize / 14)).round()}-${(baseMaxChars * (baseFontSize / 14)).round()} characters per page');
+    print('Font size 15px: ~${(baseMinChars * (baseFontSize / 15)).round()}-${(baseMaxChars * (baseFontSize / 15)).round()} characters per page');
+    print('Font size 16px: ~${(baseMinChars * (baseFontSize / 16)).round()}-${(baseMaxChars * (baseFontSize / 16)).round()} characters per page');
+    print('Font size 18px: ~${(baseMinChars * (baseFontSize / 18)).round()}-${(baseMaxChars * (baseFontSize / 18)).round()} characters per page');
+    print('Font size 20px: ~${(baseMinChars * (baseFontSize / 20)).round()}-${(baseMaxChars * (baseFontSize / 20)).round()} characters per page');
+    print('Font size 22px: ~${(baseMinChars * (baseFontSize / 22)).round()}-${(baseMaxChars * (baseFontSize / 22)).round()} characters per page');
+    print('Font size 24px: ~${(baseMinChars * (baseFontSize / 24)).round()}-${(baseMaxChars * (baseFontSize / 24)).round()} characters per page');
+    print('═══════════════════════════════════════════════════════');
+
+    // REMOVED: Height-based adjustment that was overriding font-size scaling
+    // The previous logic was forcing all font sizes to use the same character count,
+    // which defeated the purpose of dynamic font-size-based pagination.
+    // Now we trust the font-size-based calculation exclusively.
+
+    // Calculate estimated pages based on character count
+    // This ensures font size changes affect pagination
+    int charBasedEstimatedPages = (totalChars / maxCharsPerPage).ceil();
+
+    // Use the MAXIMUM of height-based and character-based estimates
+    // This ensures we respect both constraints
+    int finalEstimatedPages = charBasedEstimatedPages > estimatedPages ? charBasedEstimatedPages : estimatedPages;
+
+    print('📊 Page Estimation:');
+    print('   Height-based: $estimatedPages pages');
+    print('   Character-based: $charBasedEstimatedPages pages');
+    print('   Final estimate: $finalEstimatedPages pages');
+    print('📏 Final limits -> Min chars: $minCharsPerPage, Max chars: $maxCharsPerPage');
+
+    // Calculate total character count and track each span's character count
+    List<int> spanCharCounts = [];
 
     for (var span in flatSpans) {
-      double spanH = 0;
-      if (span is WidgetSpan) {
-        try {
-          TextPainter p = TextPainter(text: TextSpan(children: [span]), textDirection: TextDirection.ltr);
-          p.layout(maxWidth: maxWidth);
-          spanH = p.height;
-          p.dispose();
-        } catch (e) {
-          spanH = 50;
+      int charCount = 0;
+      if (span is TextSpan && span.text != null) {
+        charCount = span.text!.length;
+      }
+      spanCharCounts.add(charCount);
+    }
+
+    // REMOVED optimization: We ALWAYS want to run the distribution loop
+    // to ensure splitting works correctly for single large paragraphs.
+
+    // Distribute content across pages based on character count
+    List<List<InlineSpan>> allPages = [];
+    List<InlineSpan> currentPageList = [];
+    int currentPageChars = 0;
+    for (int i = 0; i < flatSpans.length; i++) {
+      final span = flatSpans[i];
+      final spanChars = spanCharCounts[i];
+
+      // Check if adding this span would exceed the max character limit
+      if (currentPageChars + spanChars > maxCharsPerPage) {
+        if (currentPageList.isNotEmpty && currentPageChars >= minCharsPerPage) {
+          allPages.add(List.from(currentPageList));
+          currentPageList.clear();
+          currentPageChars = 0;
+        } else {}
+
+        // If the span itself fits now (on fresh page), just add it
+        if (spanChars <= maxCharsPerPage) {
+          currentPageList.add(span);
+          currentPageChars += spanChars;
+          continue;
+        } else {}
+
+        // The span is too large for a single page (even a fresh one) -> We MUST split it
+        if (span is TextSpan && span.text != null) {
+          String remainingText = span.text!;
+          TextStyle? style = span.style;
+
+          while (remainingText.isNotEmpty) {
+            // How much space do we have left on current page?
+            int spaceLeft = maxCharsPerPage - currentPageChars;
+
+            // If space is too small (e.g. < 100 chars), just break page to start fresh
+            if (spaceLeft < 100 && currentPageList.isNotEmpty) {
+              allPages.add(List.from(currentPageList));
+              currentPageList.clear();
+              currentPageChars = 0;
+              spaceLeft = maxCharsPerPage;
+            }
+
+            if (remainingText.length <= spaceLeft) {
+              // Fits completely
+              currentPageList.add(TextSpan(text: remainingText, style: style));
+              currentPageChars += remainingText.length;
+              remainingText = '';
+            } else {
+              // Need to split. Find last space before limit
+              int splitIndex = remainingText.lastIndexOf(' ', spaceLeft);
+              if (splitIndex == -1 || splitIndex < spaceLeft * 0.7) {
+                // If no space found nearby, just hard split at limit
+                splitIndex = spaceLeft;
+              }
+
+              String textPart = remainingText.substring(0, splitIndex);
+              remainingText = remainingText.substring(splitIndex); // Keep space or not? usually keep space at start of next line or drop it?
+              // Better: trimmed textPart? No, preserve spacing.
+              // Let's drop the leading space of the next part if it's a space split
+              if (remainingText.startsWith(' ')) {
+                remainingText = remainingText.substring(1);
+              }
+
+              currentPageList.add(TextSpan(text: textPart, style: style));
+              currentPageChars += textPart.length;
+
+              // Force new page
+              allPages.add(List.from(currentPageList));
+              currentPageList.clear();
+              currentPageChars = 0;
+            }
+          }
+        } else {
+          // Non-text span (widget) that is supposedly huge? Rare, but just add it to avoid loop
+          // Or if it's a widget, we can't really split it.
+          // If we just cleared the page, add it anyway even if it exceeds
+          if (currentPageList.isEmpty) {
+            currentPageList.add(span);
+            currentPageChars += spanChars;
+            // Force break after this huge widget
+            allPages.add(List.from(currentPageList));
+            currentPageList.clear();
+            currentPageChars = 0;
+          } else {
+            // Should have been handled by first check (break page), but if it falls here:
+            // Break page and add to next
+            allPages.add(List.from(currentPageList));
+            currentPageList.clear();
+            currentPageList.add(span);
+            currentPageChars += spanChars;
+          }
         }
-      } else if (span is TextSpan && span.text != null) {
-        TextPainter p = TextPainter(text: TextSpan(text: span.text, style: span.style), textDirection: TextDirection.ltr);
-        p.layout(maxWidth: maxWidth);
-        spanH = p.height;
-        p.dispose();
+      } else {
+        // Fits normally
+        print('   ✅ Fits normally, adding to current page');
+        currentPageList.add(span);
+        currentPageChars += spanChars;
       }
-
-      // Check if adding this span would exceed target height
-      if (currentPageHeight + spanH > targetHeightPerPage && currentPageList.isNotEmpty) {
-        // Save current page and start new one
-        allPages.add(List.from(currentPageList));
-        currentPageList.clear();
-        currentPageHeight = 0;
-      }
-
-      currentPageList.add(span);
-      currentPageHeight += spanH;
     }
 
     // Add remaining content as last page
@@ -1286,6 +1473,27 @@ class _PagingWidgetState extends State<PagingWidget> {
     return lineText + '-';
   }
 
+  String _extractTextFromSpan(InlineSpan span) {
+    StringBuffer buffer = StringBuffer();
+
+    void extractText(InlineSpan s) {
+      if (s is TextSpan) {
+        if (s.text != null) {
+          buffer.write(s.text);
+        }
+        if (s.children != null) {
+          for (var child in s.children!) {
+            extractText(child);
+          }
+        }
+      }
+      // WidgetSpans don't contain text we can easily extract
+    }
+
+    extractText(span);
+    return buffer.toString();
+  }
+
   void _finalizePages() {
     final bottomNavHeight = widget.showNavBar ? 10.0 : 0.0;
 
@@ -1301,6 +1509,9 @@ class _PagingWidgetState extends State<PagingWidget> {
       TextSpan contentSpan = entry.value;
 
       final isFirstPageOfChapter = index == 0;
+
+      // Extract and log page text
+      String pageText = _extractTextFromSpan(contentSpan);
 
       return BookPageBuilder.buildBookPageSpan(
         context: context,

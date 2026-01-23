@@ -18,7 +18,8 @@ class PageFlipWidget extends StatefulWidget {
       this.isRightSwipe = false,
       required this.onPageFlip,
       this.onLastPageSwipe})
-      : assert(initialIndex < children.length, 'initialIndex cannot be greater than children length'),
+      : assert(initialIndex < children.length,
+            'initialIndex cannot be greater than children length'),
         super(key: key);
 
   final Color backgroundColor;
@@ -36,7 +37,8 @@ class PageFlipWidget extends StatefulWidget {
   PageFlipWidgetState createState() => PageFlipWidgetState();
 }
 
-class PageFlipWidgetState extends State<PageFlipWidget> with TickerProviderStateMixin {
+class PageFlipWidgetState extends State<PageFlipWidget>
+    with TickerProviderStateMixin {
   int pageNumber = 0;
   List<Widget> pages = [];
   final List<AnimationController> _controllers = [];
@@ -114,25 +116,44 @@ class PageFlipWidgetState extends State<PageFlipWidget> with TickerProviderState
     currentWidget.value = Container();
     final ratio = details.delta.dx / dimens.maxWidth;
     if (_isForward == null) {
-      if (widget.isRightSwipe ? details.delta.dx < 0.0 : details.delta.dx > 0.0) {
+      if (widget.isRightSwipe
+          ? details.delta.dx < 0.0
+          : details.delta.dx > 0.0) {
         _isForward = false;
-      } else if (widget.isRightSwipe ? details.delta.dx > 0.2 : details.delta.dx < -0.2) {
+      } else if (widget.isRightSwipe
+          ? details.delta.dx > 0.2
+          : details.delta.dx < -0.2) {
         _isForward = true;
       } else {
         _isForward = null;
       }
     }
 
-    if (_isForward == true || pageNumber == 0) {
-      // Always update controller for animation - including last page for chapter transitions
-      widget.isRightSwipe ? _controllers[pageNumber].value -= ratio : _controllers[pageNumber].value += ratio;
+    // Update animation controller for both forward and backward swipes
+    if (_isForward == true) {
+      // Forward swipe - animate current page
+      widget.isRightSwipe
+          ? _controllers[pageNumber].value -= ratio
+          : _controllers[pageNumber].value += ratio;
+    } else if (_isForward == false && pageNumber > 0) {
+      // Backward swipe - animate previous page
+      widget.isRightSwipe
+          ? _controllers[pageNumber - 1].value += ratio
+          : _controllers[pageNumber - 1].value -= ratio;
+    } else if (pageNumber == 0 && _isForward == true) {
+      // Special case for page 0 forward swipe if not covered above (though first condition covers it)
+      // This branch might be redundant but keeping safe logic
+      widget.isRightSwipe
+          ? _controllers[pageNumber].value -= ratio
+          : _controllers[pageNumber].value += ratio;
     }
   }
 
   Future _onDragFinish() async {
     if (_isForward != null) {
       if (_isForward == true) {
-        if (!_isLastPage && _controllers[pageNumber].value <= (widget.cutoffForward + 0.15)) {
+        if (!_isLastPage &&
+            _controllers[pageNumber].value <= (widget.cutoffForward + 0.15)) {
           await nextPage();
           widget.onPageFlip(pageNumber);
         } else if (_isLastPage) {
@@ -147,7 +168,8 @@ class PageFlipWidgetState extends State<PageFlipWidget> with TickerProviderState
           widget.onPageFlip(pageNumber);
         }
       } else {
-        if (!_isFirstPage && _controllers[pageNumber - 1].value >= widget.cutoffPrevious) {
+        if (!_isFirstPage &&
+            _controllers[pageNumber - 1].value >= widget.cutoffPrevious) {
           await previousPage();
           widget.onPageFlip(pageNumber);
         } else {
@@ -243,7 +265,9 @@ class PageFlipWidgetState extends State<PageFlipWidget> with TickerProviderState
               widget.lastPage!,
             ],
             // Reverse in Stack so page 0 (current) is on top, higher pages below
-            if (pages.isNotEmpty) ...pages.reversed else ...[const SizedBox.shrink()],
+            if (pages.isNotEmpty)
+              ...pages.reversed
+            else ...[const SizedBox.shrink()],
           ],
         ),
       ),

@@ -17,10 +17,17 @@ class EpubChapterFixer {
         return;
       }
 
+      // Check if chapters have bad/generic titles like "index split XXX"
+      final hasBadTitles = _hasBadChapterTitles(chapters);
+
       // ✅ IMPORTANT: Don't fix if EPUB already has good chapter structure
       // If chapters count is reasonable compared to HTML files, EPUB is probably fine
+      // BUT fix if titles are bad (index split, etc.)
       if (chapters.length >= htmlFiles.length / 2 && chapters.length > 5) {
-        if (_hasInvalidChapters(chapters)) {
+        if (hasBadTitles) {
+          // Try to extract better titles from HTML content
+          _fixChapterTitlesFromHtml(epubBook);
+        } else if (_hasInvalidChapters(chapters)) {
           _repairChapterContent(epubBook);
         }
         return;
@@ -72,7 +79,7 @@ class EpubChapterFixer {
       if (chapters.isNotEmpty && _hasInvalidChapters(chapters)) {
         _repairChapterContent(epubBook);
       }
-    } catch (e, st) {}
+    } catch (e) {}
   }
 
   static void _createDummyChapter(EpubBook epubBook) {
@@ -284,6 +291,142 @@ class EpubChapterFixer {
       }
     }
     return false;
+  }
+
+  /// Check if most chapters have bad/generic titles
+  static bool _hasBadChapterTitles(List<EpubChapter> chapters) {
+    if (chapters.isEmpty) return false;
+
+    int badTitleCount = 0;
+    for (var chapter in chapters) {
+      final title = chapter.Title?.toLowerCase() ?? '';
+      if (title.isEmpty ||
+          title.contains('index_split') ||
+          title.contains('index split') ||
+          title.contains('.html') ||
+          title.contains('.xhtml') ||
+          RegExp(r'^(part|section|chapter)_?\d+$').hasMatch(title) ||
+          title == 'titlepage' ||
+          title == 'cover' ||
+          title == 'index') {
+        badTitleCount++;
+      }
+    }
+
+    // If more than half of chapters have bad titles, consider it bad
+    return badTitleCount > chapters.length / 2;
+  }
+
+  /// Extract better titles from HTML content
+  static void _fixChapterTitlesFromHtml(EpubBook epubBook) {
+    final chapters = epubBook.Chapters ?? [];
+
+    for (int i = 0; i < chapters.length; i++) {
+      final chapter = chapters[i];
+      final htmlContent = chapter.HtmlContent ?? '';
+
+      if (htmlContent.isEmpty) continue;
+
+      // Try to extract title from HTML
+      final extractedTitle = _extractTitleFromHtml(htmlContent, i);
+
+      if (extractedTitle != null && extractedTitle.isNotEmpty) {
+        chapter.Title = extractedTitle;
+      }
+    }
+  }
+
+  /// Extract title from HTML content using various methods
+  static String? _extractTitleFromHtml(String htmlContent, int chapterIndex) {
+    // Method 1: Look for <title> tag
+    final titleMatch = RegExp(r'<title[^>]*>([^<]+)</title>', caseSensitive: false).firstMatch(htmlContent);
+    if (titleMatch != null) {
+      final title = titleMatch.group(1)?.trim() ?? '';
+      if (_isValidTitle(title)) {
+        return title;
+      }
+    }
+
+    // Method 2: Look for h1 tag
+    final h1Match = RegExp(r'<h1[^>]*>([^<]+)</h1>', caseSensitive: false).firstMatch(htmlContent);
+    if (h1Match != null) {
+      final title = h1Match.group(1)?.trim() ?? '';
+      if (_isValidTitle(title)) {
+        return title;
+      }
+    }
+
+    // Method 3: Look for h2 tag
+    final h2Match = RegExp(r'<h2[^>]*>([^<]+)</h2>', caseSensitive: false).firstMatch(htmlContent);
+    if (h2Match != null) {
+      final title = h2Match.group(1)?.trim() ?? '';
+      if (_isValidTitle(title)) {
+        return title;
+      }
+    }
+
+    // Method 4: Look for class="chapter" or class="title" elements
+    final classMatch = RegExp(r'<[^>]+class="[^"]*(?:chapter|title|heading)[^"]*"[^>]*>([^<]+)<', caseSensitive: false).firstMatch(htmlContent);
+    if (classMatch != null) {
+      final title = classMatch.group(1)?.trim() ?? '';
+      if (_isValidTitle(title)) {
+        return title;
+      }
+    }
+
+    // Method 5: Look for "CHAPTER X" or "Chapter X: Title" pattern in text
+    final plainText = htmlContent.replaceAll(RegExp(r'<[^>]+>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final chapterPattern = RegExp(
+      r'(?:CHAPTER|Chapter|BÖLÜM|Bölüm|ГЛАВА|Глава|FASIL|Fasıl)\s+(\d+|[IVXLC]+)(?:\s*[-–—:．.]\s*(.{1,80}))?',
+      caseSensitive: false,
+    );
+
+    final chapterMatch = chapterPattern.firstMatch(plainText);
+    if (chapterMatch != null) {
+      final num = chapterMatch.group(1) ?? '';
+      final subtitle = chapterMatch.group(2)?.trim() ?? '';
+
+      if (subtitle.isNotEmpty && _isValidTitle(subtitle)) {
+        return 'Chapter $num: $subtitle';
+      } else if (num.isNotEmpty) {
+        return 'Chapter $num';
+      }
+    }
+
+    // Method 6: Look for first significant bold text
+    final boldMatch = RegExp(r'<(?:b|strong)[^>]*>([^<]{3,80})</(?:b|strong)>', caseSensitive: false).firstMatch(htmlContent);
+    if (boldMatch != null) {
+      final title = boldMatch.group(1)?.trim() ?? '';
+      if (_isValidTitle(title) && title.length >= 3 && title.length <= 80) {
+        return title;
+      }
+    }
+
+    // No valid title found
+    return null;
+  }
+
+  /// Check if a title is valid (not generic/useless)
+  static bool _isValidTitle(String title) {
+    if (title.isEmpty || title.length < 2) return false;
+
+    final lowerTitle = title.toLowerCase();
+
+    // Bad patterns
+    if (lowerTitle.contains('index_split') ||
+        lowerTitle.contains('index split') ||
+        lowerTitle.contains('.html') ||
+        lowerTitle.contains('.xhtml') ||
+        lowerTitle == 'titlepage' ||
+        lowerTitle == 'cover' ||
+        lowerTitle == 'index' ||
+        lowerTitle == 'start' ||
+        lowerTitle == 'untitled' ||
+        RegExp(r'^(part|section)_?\d+$').hasMatch(lowerTitle)) {
+      return false;
+    }
+
+    return true;
   }
 
   static void _repairChapterContent(EpubBook epubBook) {

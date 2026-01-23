@@ -202,7 +202,7 @@ class EpubChapterHelper {
       } else {
         content = '<html><body><p>Chapter not found</p></body></html>';
       }
-    } catch (e, st) {
+    } catch (e) {
       content = '<html><body><p>Error loading chapter: $e</p></body></html>';
     }
 

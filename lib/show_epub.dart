@@ -203,7 +203,7 @@ class ShowEpubState extends State<ShowEpub> {
     }
   }
 
-  reLoadChapter({bool init = false, int index = -1, int startPage = 0}) async {
+  reLoadChapter({bool init = false, int index = -1, int startPage = -1}) async {
     if (_isLoadingChapter) return;
     _isLoadingChapter = true;
     int currentIndex = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
@@ -212,9 +212,11 @@ class ShowEpubState extends State<ShowEpub> {
     prevSwipe = 0;
 
     if (!init && index != -1 && index != currentIndex) {
+      // Different chapter - update both chapter and page
       await bookProgress.setCurrentChapterIndex(bookId, index);
-      await bookProgress.setCurrentPageIndex(bookId, startPage);
-    } else if (startPage > 0) {
+      await bookProgress.setCurrentPageIndex(bookId, startPage >= 0 ? startPage : 0);
+    } else if (startPage >= 0) {
+      // Same chapter but specific page requested - update page
       await bookProgress.setCurrentPageIndex(bookId, startPage);
     }
     final isCalculatingUi = isCalculatingTotalPages;
@@ -228,6 +230,62 @@ class ShowEpubState extends State<ShowEpub> {
     chaptersList = result['chaptersList'] as List<LocalChapterModel>;
     _filteredToOriginalIndex = result['filteredToOriginalIndex'] as Map<int, int>;
     _updateChapterPageNumbers();
+
+    // DEBUG: Print Navigation/TOC info
+    print('📋 ============= EPUB NAVIGATION (TOC) =============');
+    if (epubBook.Schema?.Navigation?.NavMap?.Points != null) {
+      final points = epubBook.Schema!.Navigation!.NavMap!.Points!;
+      print('📋 Total NavMap Points: ${points.length}');
+      for (int i = 0; i < points.length; i++) {
+        final point = points[i];
+        final source = point.Content?.Source ?? 'null';
+        final label = point.NavigationLabels?.isNotEmpty == true ? point.NavigationLabels!.first.Text : 'null';
+        print('📋 [$i] Label: "$label" | Source: $source');
+
+        // Print nested children if any
+        if (point.ChildNavigationPoints != null && point.ChildNavigationPoints!.isNotEmpty) {
+          for (int j = 0; j < point.ChildNavigationPoints!.length; j++) {
+            final child = point.ChildNavigationPoints![j];
+            final childSource = child.Content?.Source ?? 'null';
+            final childLabel = child.NavigationLabels?.isNotEmpty == true ? child.NavigationLabels!.first.Text : 'null';
+            print('📋    └── Child[$j]: "$childLabel" | Source: $childSource');
+          }
+        }
+      }
+    } else {
+      print('📋 No Navigation/TOC found in EPUB');
+    }
+    print('📋 ==================================================');
+
+    // DEBUG: Print original EPUB chapters
+    print('📕 ============= ORIGINAL EPUB CHAPTERS =============');
+    print('📕 Total EPUB chapters: ${_chapters.length}');
+    for (int i = 0; i < _chapters.length; i++) {
+      final ch = _chapters[i];
+      final htmlLen = ch.HtmlContent?.length ?? 0;
+      final subCount = ch.SubChapters?.length ?? 0;
+      print('📕 [$i] Title: "${ch.Title}" | ContentFileName: ${ch.ContentFileName} | HTML length: $htmlLen | SubChapters: $subCount');
+
+      // Print subchapters
+      if (ch.SubChapters != null && ch.SubChapters!.isNotEmpty) {
+        for (int j = 0; j < ch.SubChapters!.length; j++) {
+          final sub = ch.SubChapters![j];
+          print('📕    └── SubChapter[$j]: "${sub.Title}" | ContentFileName: ${sub.ContentFileName}');
+        }
+      }
+    }
+    print('📕 ===================================================');
+
+    // DEBUG: Print built chapters list
+    print('📚 ============= BUILT CHAPTERS LIST =============');
+    print('📚 Total built chapters: ${chaptersList.length}');
+    for (int i = 0; i < chaptersList.length; i++) {
+      final ch = chaptersList[i];
+      final prefix = ch.isSubChapter ? '   └── ' : '';
+      print('📚 [$i] ${prefix}${ch.chapter} (startPage: ${ch.startPage}, pageCount: ${ch.pageCount}, isSubChapter: ${ch.isSubChapter})');
+    }
+    print('📚 filteredToOriginalIndex: $_filteredToOriginalIndex');
+    print('📚 ================================================');
     // No background calculation - pages are calculated as chapters are read
 
     final progress = bookProgress.getBookProgress(bookId);
@@ -339,12 +397,49 @@ class ShowEpubState extends State<ShowEpub> {
     fontSizeProgress = newSize;
     _fontSize = newSize;
     gs.write(libFontSize, _fontSize);
+
+    // CRITICAL: Clear cache and force full repagination
     _clearPageCountsCache();
+
+    // Get current position BEFORE repagination
+    final currentPageInBook = controllerPaging.currentPage.value;
     final currentChapterIdx = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
-    final currentPageIdx = bookProgress.getBookProgress(bookId).currentPageIndex ?? 0;
+
+    // Calculate chapter-relative page from book page
+    int accumulatedPages = 0;
+    final originalChapterIdx = _filteredToOriginalIndex[currentChapterIdx] ?? currentChapterIdx;
+
+    for (int i = 0; i < originalChapterIdx; i++) {
+      accumulatedPages += chapterPageCounts[i] ?? 0;
+    }
+
+    int pageInChapter = (currentPageInBook - accumulatedPages - 1).clamp(0, (chapterPageCounts[originalChapterIdx] ?? 1) - 1);
+
+    // Lock to preserve position during repagination
+    _setJumpLock(
+      pageInBook: currentPageInBook,
+      totalPages: totalPagesInBook,
+      chapterIndex: currentChapterIdx,
+      pageInChapter: pageInChapter,
+    );
+
     setState(() {});
-    reLoadChapter(index: currentChapterIdx, startPage: currentPageIdx);
+
+    // Reload with preserved position
+    reLoadChapter(index: currentChapterIdx, startPage: pageInChapter);
   }
+  // void changeFontSize(double newSize) {
+  //   fontSizeProgress = newSize;
+  //   _fontSize = newSize;
+  //   gs.write(libFontSize, _fontSize);
+  //   _clearPageCountsCache();
+  //   final currentChapterIdx =
+  //       bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
+  //   final currentPageIdx =
+  //       bookProgress.getBookProgress(bookId).currentPageIndex ?? 0;
+  //   setState(() {});
+  //   reLoadChapter(index: currentChapterIdx, startPage: currentPageIdx);
+  // }
 
   openTableOfContents() async {
     final originalChapterIndex = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
