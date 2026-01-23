@@ -368,6 +368,13 @@ class _PagingWidgetState extends State<PagingWidget> {
   }
 
   Future<void> _paginate() async {
+    print('');
+    print('🔖 ══════════════════════════════════════════════════════');
+    print('🔖 CHAPTER PAGINATION STARTED');
+    print('🔖 Chapter Title: "${widget.chapterTitle}"');
+    print('🔖 Current Page Index: $_currentPageIndex');
+    print('🔖 ══════════════════════════════════════════════════════');
+
     final pageSize = _initializedRenderBox.size;
     _pageSpans.clear();
 
@@ -1175,6 +1182,19 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     double maxHeight = pageSize.height - reservedSpace;
 
+    // DEBUG: Page size and reserved space breakdown
+    print('═══════════════════════════════════════════════════════');
+    print('📐 PAGINATION LAYOUT METRICS');
+    print('PageSize: ${pageSize.width.toStringAsFixed(1)} x ${pageSize.height.toStringAsFixed(1)}');
+    print('HorizontalPadding: ${horizontalPadding.toStringAsFixed(1)}');
+    print('MaxWidth: ${maxWidth.toStringAsFixed(1)}');
+    print('ContainerPadding: ${containerPadding.toStringAsFixed(1)}');
+    print('ChapterHeaderSpace: ${chapterHeaderSpace.toStringAsFixed(1)}');
+    print('BottomSafeArea: ${bottomSafeArea.toStringAsFixed(1)}');
+    print('ReservedSpace: ${reservedSpace.toStringAsFixed(1)}');
+    print('MaxHeight: ${maxHeight.toStringAsFixed(1)}');
+    print('═══════════════════════════════════════════════════════');
+
     // FIRST PASS: Calculate total content height to see if it fits in one page
     double totalContentHeight = 0;
     int totalChars = 0;
@@ -1281,6 +1301,10 @@ class _PagingWidgetState extends State<PagingWidget> {
     print('Scale Factor: ${fontScaleFactor.toStringAsFixed(2)}');
     print('Screen Capacity Factor: ${screenCapacityFactor.toStringAsFixed(2)}');
     print('Calculated Range: $minCharsPerPage - $maxCharsPerPage chars/page');
+    print('MaxHeight (content area): ${maxHeight.toStringAsFixed(1)}');
+    print('TotalContentHeight: ${totalContentHeight.toStringAsFixed(1)}');
+    print('PageRatio: ${pageRatio.toStringAsFixed(2)}');
+    print('EstimatedPages (height-based): $estimatedPages');
     print('───────────────────────────────────────────────────────');
     print('📐 CHARACTER COUNT EXAMPLES BY FONT SIZE:');
     print('Font size 10px: ~${(baseMinChars * (baseFontSize / 10)).round()}-${(baseMaxChars * (baseFontSize / 10)).round()} characters per page');
@@ -1333,17 +1357,54 @@ class _PagingWidgetState extends State<PagingWidget> {
     List<List<InlineSpan>> allPages = [];
     List<InlineSpan> currentPageList = [];
     int currentPageChars = 0;
+
+    // Calculate remaining chars from any point
+    int getRemainingChars(int fromIndex) {
+      int remaining = 0;
+      for (int j = fromIndex; j < flatSpans.length; j++) {
+        remaining += spanCharCounts[j];
+      }
+      return remaining;
+    }
+
     for (int i = 0; i < flatSpans.length; i++) {
       final span = flatSpans[i];
       final spanChars = spanCharCounts[i];
 
+      // DEBUG: Show each span being processed
+      String spanPreview = '';
+      if (span is TextSpan && span.text != null) {
+        spanPreview = span.text!.length > 50 ? '${span.text!.substring(0, 50)}...' : span.text!;
+      } else if (span is WidgetSpan) {
+        spanPreview = '[WIDGET]';
+      }
+      print('📝 Span[$i]: chars=$spanChars, pageChars=$currentPageChars, preview="$spanPreview"');
+
       // Check if adding this span would exceed the max character limit
       if (currentPageChars + spanChars > maxCharsPerPage) {
+        print('⚠️ WOULD EXCEED: $currentPageChars + $spanChars = ${currentPageChars + spanChars} > $maxCharsPerPage');
+
+        // ORPHAN PREVENTION: Check how much content remains after this span
+        int remainingAfterThis = getRemainingChars(i + 1);
+        bool wouldOrphan = remainingAfterThis > 0 && remainingAfterThis < 100;
+
+        if (wouldOrphan) {
+          print('🟠 ORPHAN PREVENTION: Only $remainingAfterThis chars remain after this. Adding all to current page.');
+          // Add this span and all remaining to current page to prevent orphan
+          currentPageList.add(span);
+          currentPageChars += spanChars;
+          continue; // Let the loop add remaining spans normally
+        }
+
         if (currentPageList.isNotEmpty && currentPageChars >= minCharsPerPage) {
+          print('🔴 PAGE BREAK! Current page has $currentPageChars chars (>= min $minCharsPerPage). Starting new page.');
+          print('   Breaking text: "$spanPreview"');
           allPages.add(List.from(currentPageList));
           currentPageList.clear();
           currentPageChars = 0;
-        } else {}
+        } else {
+          print('🟡 NOT BREAKING: currentPageChars=$currentPageChars < minCharsPerPage=$minCharsPerPage');
+        }
 
         // If the span itself fits now (on fresh page), just add it
         if (spanChars <= maxCharsPerPage) {
@@ -1421,16 +1482,49 @@ class _PagingWidgetState extends State<PagingWidget> {
         }
       } else {
         // Fits normally
-        print('   ✅ Fits normally, adding to current page');
         currentPageList.add(span);
         currentPageChars += spanChars;
       }
     }
 
-    // Add remaining content as last page
+    // Add remaining content as last page (only if it has meaningful content)
     if (currentPageList.isNotEmpty) {
-      allPages.add(currentPageList);
+      // Check if the last page has any real content (not just whitespace/newlines)
+      bool hasRealContent = false;
+      for (var s in currentPageList) {
+        if (s is TextSpan && s.text != null) {
+          if (s.text!.trim().isNotEmpty) {
+            hasRealContent = true;
+            break;
+          }
+        } else if (s is WidgetSpan) {
+          hasRealContent = true;
+          break;
+        }
+      }
+
+      if (hasRealContent) {
+        print('🟢 FINAL PAGE: Adding last page with $currentPageChars chars');
+        allPages.add(currentPageList);
+      } else {
+        print('⏭️ SKIPPING EMPTY FINAL PAGE: Only whitespace/newlines ($currentPageChars chars)');
+        // Append remaining whitespace to previous page if exists
+        if (allPages.isNotEmpty) {
+          allPages.last.addAll(currentPageList);
+        }
+      }
     }
+
+    print('═══════════════════════════════════════════════════════');
+    print('📊 PAGINATION RESULT: ${allPages.length} pages created');
+    for (int p = 0; p < allPages.length; p++) {
+      int pageChars = 0;
+      for (var s in allPages[p]) {
+        if (s is TextSpan && s.text != null) pageChars += s.text!.length;
+      }
+      print('   Page ${p + 1}: $pageChars chars');
+    }
+    print('═══════════════════════════════════════════════════════');
 
     // Convert to TextSpans
     for (var pageSpans in allPages) {
@@ -1438,6 +1532,14 @@ class _PagingWidgetState extends State<PagingWidget> {
     }
 
     _finalizePages();
+
+    print('');
+    print('🔖 ══════════════════════════════════════════════════════');
+    print('🔖 CHAPTER PAGINATION COMPLETED');
+    print('🔖 Chapter Title: "${widget.chapterTitle}"');
+    print('🔖 Total Pages Created: ${_pageSpans.length}');
+    print('🔖 Current Page Index: $_currentPageIndex');
+    print('🔖 ══════════════════════════════════════════════════════');
   }
 
   String _addHyphenIfLineBreaksMidWord(String lineText, String fullText, int endOffset) {

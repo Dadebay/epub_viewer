@@ -43,6 +43,24 @@ class ChaptersBottomSheet extends StatefulWidget {
 class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
   @override
   Widget build(BuildContext context) {
+    // DEBUG: Print all chapter start pages when bottom sheet opens
+    print('');
+    print('📋 ════════════════════════════════════════════════════');
+    print('📋 CHAPTERS BOTTOM SHEET OPENED');
+    print('📋 Current Page: ${widget.currentPage}');
+    print('📋 Total Pages: ${widget.totalPages}');
+    print('📋 Current Page In Chapter: ${widget.currentPageInChapter}');
+    print('📋 Current Subchapter Title: ${widget.currentSubchapterTitle ?? "None"}');
+    print('📋 ────────────────────────────────────────────────────');
+    print('📋 ALL CHAPTERS WITH START PAGES:');
+    for (int i = 0; i < widget.chapters.length; i++) {
+      final ch = widget.chapters[i];
+      final prefix = ch.isSubChapter ? '   └── ' : '';
+      print('📋 [$i] ${prefix}${ch.chapter}');
+      print('     → startPage: ${ch.startPage}, pageCount: ${ch.pageCount}, pageInChapter: ${ch.pageInChapter}');
+    }
+    print('📋 ════════════════════════════════════════════════════');
+
     String allChapterText = widget.chapters.map((c) => c.chapter).join(' ');
     TextDirection textDirection = RTLHelper.getTextDirection(allChapterText);
 
@@ -292,8 +310,9 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                                   ],
                                 ),
                               ),
-                              // Show page number if available
-                              if (widget.chapters[i].startPage > 0)
+                              // Show page number ONLY if chapter has been calculated (pageCount > 0)
+                              // Don't show placeholder values that will change later
+                              if (widget.chapters[i].startPage > 0 && widget.chapters[i].pageCount > 0)
                                 Text(
                                   '${widget.chapters[i].startPage}',
                                   style: TextStyle(

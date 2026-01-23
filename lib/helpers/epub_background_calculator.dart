@@ -48,7 +48,8 @@ class EpubBackgroundCalculator {
         // Smaller font = more chars per page, larger font = fewer chars per page
         final fontSizeMultiplier = 14.0 / fontSize;
         final charsPerPage = (2000 * fontSizeMultiplier).round();
-        final estimatedPages = (content.length / charsPerPage).ceil().clamp(5, 100);
+        // FIXED: Changed clamp(5, 100) to clamp(1, 100) - minimum 5 was causing wrong startPage calculations
+        final estimatedPages = (content.length / charsPerPage).ceil().clamp(1, 100);
 
         // Only log in verbose mode
         // if (verbose) dev.log('✅ Chapter $i: $estimatedPages pages (estimated, fontSize: $fontSize)');
@@ -75,11 +76,12 @@ class EpubBackgroundCalculator {
     required String content,
     required double fontSize,
   }) {
-    if (content.isEmpty) return 5;
+    if (content.isEmpty) return 1;
 
     final fontSizeMultiplier = 14.0 / fontSize;
     final charsPerPage = (2000 * fontSizeMultiplier).round();
-    final estimatedPages = (content.length / charsPerPage).ceil().clamp(5, 100);
+    // FIXED: Changed clamp(5, 100) to clamp(1, 100) - minimum 5 was causing wrong startPage calculations
+    final estimatedPages = (content.length / charsPerPage).ceil().clamp(1, 100);
 
     return estimatedPages;
   }

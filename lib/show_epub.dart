@@ -285,6 +285,15 @@ class ShowEpubState extends State<ShowEpub> {
       print('📚 [$i] ${prefix}${ch.chapter} (startPage: ${ch.startPage}, pageCount: ${ch.pageCount}, isSubChapter: ${ch.isSubChapter})');
     }
     print('📚 filteredToOriginalIndex: $_filteredToOriginalIndex');
+
+    // Calculate and show total pages in book
+    int totalBookPages = 0;
+    for (final ch in chaptersList) {
+      totalBookPages += ch.pageCount;
+    }
+    print('📚 ───────────────────────────────────────────────');
+    print('📚 TOTAL PAGES IN BOOK: $totalBookPages');
+    print('📚 ───────────────────────────────────────────────');
     print('📚 ================================================');
     // No background calculation - pages are calculated as chapters are read
 
@@ -318,6 +327,19 @@ class ShowEpubState extends State<ShowEpub> {
   }
 
   updateContentAccordingChapter(int chapterIndex) async {
+    print('');
+    print('📖 ════════════════════════════════════════════════════');
+    print('📖 CHAPTER CHANGE TRIGGERED');
+    print('📖 Chapter Index: $chapterIndex');
+    if (chapterIndex >= 0 && chapterIndex < chaptersList.length) {
+      final ch = chaptersList[chapterIndex];
+      print('📖 Chapter Name: "${ch.chapter}"');
+      print('📖 Start Page: ${ch.startPage}');
+      print('📖 Page Count: ${ch.pageCount}');
+      print('📖 Is SubChapter: ${ch.isSubChapter}');
+    }
+    print('📖 ════════════════════════════════════════════════════');
+
     final currentSavedIndex = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     if (currentSavedIndex != chapterIndex) {
       await bookProgress.setCurrentChapterIndex(bookId, chapterIndex);
