@@ -146,7 +146,6 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
 
   int _calculatePageFromPosition(double localX) {
     if (_progressBarWidth <= 0) {
-      debugPrint('⚠️ _progressBarWidth <= 0, returning currentPage');
       return widget.currentPage;
     }
 
@@ -154,27 +153,12 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
     final targetPage = (progress * widget.totalPages).round();
     final clampedPage = targetPage.clamp(1, widget.totalPages);
 
-    debugPrint('📊 _calculatePageFromPosition:');
-    debugPrint('   localX: $localX');
-    debugPrint('   _progressBarWidth: $_progressBarWidth');
-    debugPrint('   progress: ${progress.toStringAsFixed(4)}');
-    debugPrint('   widget.totalPages: ${widget.totalPages}');
-    debugPrint('   targetPage (rounded): $targetPage');
-    debugPrint('   clampedPage: $clampedPage');
-
     return clampedPage;
   }
 
   @override
   Widget build(BuildContext context) {
     // Debug prints for page calculation
-    debugPrint('=== ProgressBarWidget Debug ===');
-    debugPrint('currentPage: ${widget.currentPage}');
-    debugPrint('totalPages: ${widget.totalPages}');
-    debugPrint('isCalculating: ${widget.isCalculating}');
-    debugPrint('_isDragging: $_isDragging');
-    debugPrint('_targetPage: $_targetPage');
-    debugPrint('===============================');
 
     return GestureDetector(
         onHorizontalDragStart: (details) {
@@ -218,25 +202,17 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
           }
         },
         onHorizontalDragEnd: (details) {
-          debugPrint('\n🏁 DRAG END EVENT:');
-          debugPrint('   _hasDraggedSignificantly: $_hasDraggedSignificantly');
-          debugPrint('   _targetPage: $_targetPage');
-          debugPrint('   widget.currentPage: ${widget.currentPage}');
-
           _removeOverlay();
 
           // Only process as drag if moved significantly
           if (_hasDraggedSignificantly && _targetPage != widget.currentPage && widget.onJumpToPage != null) {
-            debugPrint('   ✅ Significant drag - Calling onJumpToPage($_targetPage)');
             HapticFeedback.mediumImpact();
             widget.onJumpToPage!(_targetPage);
           } else if (!_hasDraggedSignificantly && _targetPage != widget.currentPage && widget.onJumpToPage != null) {
             // Treat as tap if didn't drag significantly
-            debugPrint('   ✅ Small drag (treated as tap) - Calling onJumpToPage($_targetPage)');
             HapticFeedback.mediumImpact();
             widget.onJumpToPage!(_targetPage);
           } else {
-            debugPrint('   ❌ No jump (same page or no callback)');
             HapticFeedback.lightImpact();
           }
 
@@ -255,25 +231,12 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
           final progressBarPadding = 16.w;
           final localX = localPosition.dx - progressBarPadding;
 
-          debugPrint('\n👆 TAP DOWN EVENT:');
-          debugPrint('   globalPosition: ${details.globalPosition}');
-          debugPrint('   localPosition: $localPosition');
-          debugPrint('   progressBarPadding: $progressBarPadding');
-          debugPrint('   localX (after padding): $localX');
-          debugPrint('   box.size.width: ${box.size.width}');
-
           _progressBarWidth = box.size.width - (progressBarPadding * 2);
           final targetPage = _calculatePageFromPosition(localX);
 
-          debugPrint('   🎯 Target Page: $targetPage');
-          debugPrint('   Current Page: ${widget.currentPage}');
-
           if (targetPage != widget.currentPage && widget.onJumpToPage != null) {
-            debugPrint('   ✅ Calling onJumpToPage($targetPage)');
             widget.onJumpToPage!(targetPage);
-          } else {
-            debugPrint('   ❌ Not jumping (same page or no callback)');
-          }
+          } else {}
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),

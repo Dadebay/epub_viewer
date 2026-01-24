@@ -108,6 +108,7 @@ class PagingWidget extends StatefulWidget {
     this.showNavBar = true,
     this.linesPerPage = 30,
     this.epubBook,
+    this.subchapterTitles = const [],
   });
 
   final String bookId;
@@ -125,6 +126,7 @@ class PagingWidget extends StatefulWidget {
   final TextStyle style;
   final String textContent;
   final int totalChapters;
+  final List<String> subchapterTitles;
 
   @override
   _PagingWidgetState createState() => _PagingWidgetState();
@@ -181,6 +183,11 @@ class _PagingWidgetState extends State<PagingWidget> {
     _handler = PagingTextHandler(paginate: rePaginate, bookId: widget.bookId);
     _handler.setPageFlipController(_pageController);
     widget.handlerCallback(_handler);
+
+    // Debug: Show what chapter/subchapter titles we're matching against
+    print('📚 PagingWidget initialized for chapter: "${widget.chapterTitle}"');
+    print('   Subchapter titles to match (${widget.subchapterTitles.length}): ${widget.subchapterTitles.take(10).toList()}${widget.subchapterTitles.length > 10 ? "..." : ""}');
+
     rePaginate();
   }
 
@@ -368,13 +375,6 @@ class _PagingWidgetState extends State<PagingWidget> {
   }
 
   Future<void> _paginate() async {
-    print('');
-    print('🔖 ══════════════════════════════════════════════════════');
-    print('🔖 CHAPTER PAGINATION STARTED');
-    print('🔖 Chapter Title: "${widget.chapterTitle}"');
-    print('🔖 Current Page Index: $_currentPageIndex');
-    print('🔖 ══════════════════════════════════════════════════════');
-
     final pageSize = _initializedRenderBox.size;
     _pageSpans.clear();
 
@@ -467,6 +467,10 @@ class _PagingWidgetState extends State<PagingWidget> {
   }
 
   Future<InlineSpan> _parseNode(dom.Node node, double maxWidth, {bool isPoetry = false}) async {
+    String _normalizeTitle(String input) {
+      return input.replaceAll('\u00AD', '').replaceAll(RegExp(r'\s+'), ' ').replaceAll(RegExp(r'^[\s\-–—:;.,!?«»"“”]+|[\s\-–—:;.,!?«»"“”]+$'), '').trim().toLowerCase();
+    }
+
     if (node is dom.Element) {
     } else if (node is dom.Text) {
       final preview = node.text.trim().length > 50 ? node.text.trim().substring(0, 50) + '...' : node.text.trim();
@@ -495,8 +499,8 @@ class _PagingWidgetState extends State<PagingWidget> {
         return const TextSpan(text: '');
       }
 
-      text = text.replaceAll(RegExp(r'\s+([.,;:!?\)\]»])'), '\$1');
-      text = text.replaceAll(RegExp(r'([([«])\s+'), '\$1');
+      text = text.replaceAll(RegExp(r'\s+([.,;:!?\)\]»])'), r'$1');
+      text = text.replaceAll(RegExp(r'([([«])\s+'), r'$1');
 
       return TextSpan(
         text: text,
@@ -515,14 +519,58 @@ class _PagingWidgetState extends State<PagingWidget> {
       } else if (node.localName == 'br') {
         return const TextSpan(text: "\n");
       } else if (node.localName == 'p' || node.localName == 'div') {
-        // DEBUG: Check if this paragraph has italic children (em, i)
-        bool hasItalicChild = false;
-        String childrenDebug = '';
-        for (var child in node.children) {
-          if (child.localName == 'em' || child.localName == 'i') {
-            hasItalicChild = true;
+        // Check if this paragraph is a subchapter heading
+        final paragraphText = node.text.trim();
+        final isShortText = paragraphText.isNotEmpty && paragraphText.length < 80;
+        final hasNoLineBreaks = !paragraphText.contains('\n');
+        final normalizedParagraph = _normalizeTitle(paragraphText);
+
+        // Check if text matches any subchapter title from the list
+        bool isSubchapterTitle = false;
+        if (isShortText && hasNoLineBreaks && normalizedParagraph.isNotEmpty) {
+          for (var subTitle in widget.subchapterTitles) {
+            final normalizedSubTitle = _normalizeTitle(subTitle);
+            if (normalizedSubTitle.isNotEmpty && normalizedParagraph == normalizedSubTitle) {
+              isSubchapterTitle = true;
+              print('📌 SUBCHAPTER MATCH: "$paragraphText" == "$subTitle"');
+              break;
+            }
           }
-          childrenDebug += '<${child.localName}> ';
+        }
+
+        // Check if text matches current chapter title
+        final chapterTitleText = widget.chapterTitle.trim();
+        final normalizedChapterTitle = _normalizeTitle(chapterTitleText);
+        final isChapterTitle = isShortText && hasNoLineBreaks && normalizedParagraph.isNotEmpty && normalizedChapterTitle.isNotEmpty && normalizedParagraph == normalizedChapterTitle;
+
+        if (isChapterTitle) {
+          print('📌 CHAPTER MATCH: "$paragraphText" == "$chapterTitleText"');
+        }
+
+        // Also check for bold tags as fallback
+        final hasBoldChild = node.children.any((child) =>
+            child.localName == 'b' ||
+            child.localName == 'strong' ||
+            (child.localName == 'span' && (child.attributes['style']?.contains('font-weight') == true || child.attributes['style']?.contains('bold') == true)));
+        final isOnlyBold = node.children.length == 1 && (node.children.first.localName == 'b' || node.children.first.localName == 'strong');
+
+        // If it looks like a chapter/subchapter heading (matches title list OR has bold)
+        if ((isChapterTitle || isSubchapterTitle || hasBoldChild || isOnlyBold) && isShortText && hasNoLineBreaks) {
+          print('✅ RENDERING AS HEADING: "$paragraphText" (chapterTitle=$isChapterTitle, subchapter=$isSubchapterTitle, hasBold=$hasBoldChild, onlyBold=$isOnlyBold)');
+          // This is a chapter/subchapter heading - render with heading style
+          final headingStyle = _contentStyle.copyWith(
+            color: _contentStyle.color,
+            fontSize: (_contentStyle.fontSize ?? 16) + 4,
+            fontWeight: FontWeight.bold,
+            fontStyle: FontStyle.normal,
+            fontFamily: 'SFPro',
+            height: _isFrontMatter ? 1.25 : 1.5,
+          );
+
+          return TextSpan(
+            text: '\n$paragraphText\n\n',
+            style: headingStyle,
+          );
         }
 
         // Check if this element contains poetry/verse
@@ -649,7 +697,7 @@ class _PagingWidgetState extends State<PagingWidget> {
           style: _contentStyle.copyWith(
             color: _contentStyle.color,
             fontSize: (_contentStyle.fontSize ?? 16) + 4,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.bold,
             fontStyle: FontStyle.normal,
             height: _isFrontMatter ? 1.25 : 1.5,
           ),
@@ -1152,12 +1200,20 @@ class _PagingWidgetState extends State<PagingWidget> {
   Future<void> _paginateFlattened(List<InlineSpan> allSpans, Size pageSize) async {
     List<InlineSpan> flatSpans = [];
 
-    void flatten(InlineSpan span) {
+    // Modified flatten to inherit parent style to children (for heading detection)
+    void flatten(InlineSpan span, {TextStyle? inheritedStyle}) {
       if (span is TextSpan) {
+        // Merge inherited style with current span's style
+        final effectiveStyle = inheritedStyle != null ? inheritedStyle.merge(span.style) : span.style;
+
         if (span.children != null && span.children!.isNotEmpty) {
-          for (var child in span.children!) flatten(child);
+          // Pass the effective style to children
+          for (var child in span.children!) {
+            flatten(child, inheritedStyle: effectiveStyle);
+          }
         } else if (span.text != null && span.text!.isNotEmpty) {
-          flatSpans.add(span);
+          // Create a new TextSpan with the effective style
+          flatSpans.add(TextSpan(text: span.text, style: effectiveStyle));
         }
       } else if (span is WidgetSpan) {
         flatSpans.add(span);
@@ -1182,20 +1238,6 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     double maxHeight = pageSize.height - reservedSpace;
 
-    // DEBUG: Page size and reserved space breakdown
-    print('═══════════════════════════════════════════════════════');
-    print('📐 PAGINATION LAYOUT METRICS');
-    print('PageSize: ${pageSize.width.toStringAsFixed(1)} x ${pageSize.height.toStringAsFixed(1)}');
-    print('HorizontalPadding: ${horizontalPadding.toStringAsFixed(1)}');
-    print('MaxWidth: ${maxWidth.toStringAsFixed(1)}');
-    print('ContainerPadding: ${containerPadding.toStringAsFixed(1)}');
-    print('ChapterHeaderSpace: ${chapterHeaderSpace.toStringAsFixed(1)}');
-    print('BottomSafeArea: ${bottomSafeArea.toStringAsFixed(1)}');
-    print('ReservedSpace: ${reservedSpace.toStringAsFixed(1)}');
-    print('MaxHeight: ${maxHeight.toStringAsFixed(1)}');
-    print('═══════════════════════════════════════════════════════');
-
-    // FIRST PASS: Calculate total content height to see if it fits in one page
     double totalContentHeight = 0;
     int totalChars = 0;
     for (var span in flatSpans) {
@@ -1292,52 +1334,11 @@ class _PagingWidgetState extends State<PagingWidget> {
     if (maxCharsPerPage < 500) maxCharsPerPage = 500;
     if (minCharsPerPage > maxCharsPerPage) minCharsPerPage = maxCharsPerPage - 50;
 
-    // Log detailed font size and character count information
-    print('═══════════════════════════════════════════════════════');
-    print('📊 PAGINATION CHARACTER COUNT CALCULATION');
-    print('───────────────────────────────────────────────────────');
-    print('Total Content Characters: $totalChars');
-    print('Current Font Size: ${currentFontSize}px');
-    print('Scale Factor: ${fontScaleFactor.toStringAsFixed(2)}');
-    print('Screen Capacity Factor: ${screenCapacityFactor.toStringAsFixed(2)}');
-    print('Calculated Range: $minCharsPerPage - $maxCharsPerPage chars/page');
-    print('MaxHeight (content area): ${maxHeight.toStringAsFixed(1)}');
-    print('TotalContentHeight: ${totalContentHeight.toStringAsFixed(1)}');
-    print('PageRatio: ${pageRatio.toStringAsFixed(2)}');
-    print('EstimatedPages (height-based): $estimatedPages');
-    print('───────────────────────────────────────────────────────');
-    print('📐 CHARACTER COUNT EXAMPLES BY FONT SIZE:');
-    print('Font size 10px: ~${(baseMinChars * (baseFontSize / 10)).round()}-${(baseMaxChars * (baseFontSize / 10)).round()} characters per page');
-    print('Font size 11px: ~${(baseMinChars * (baseFontSize / 11)).round()}-${(baseMaxChars * (baseFontSize / 11)).round()} characters per page');
-    print('Font size 12px: ~${(baseMinChars * (baseFontSize / 12)).round()}-${(baseMaxChars * (baseFontSize / 12)).round()} characters per page');
-    print('Font size 13px: $baseMinChars-$baseMaxChars characters per page (BASE)');
-    print('Font size 14px: ~${(baseMinChars * (baseFontSize / 14)).round()}-${(baseMaxChars * (baseFontSize / 14)).round()} characters per page');
-    print('Font size 15px: ~${(baseMinChars * (baseFontSize / 15)).round()}-${(baseMaxChars * (baseFontSize / 15)).round()} characters per page');
-    print('Font size 16px: ~${(baseMinChars * (baseFontSize / 16)).round()}-${(baseMaxChars * (baseFontSize / 16)).round()} characters per page');
-    print('Font size 18px: ~${(baseMinChars * (baseFontSize / 18)).round()}-${(baseMaxChars * (baseFontSize / 18)).round()} characters per page');
-    print('Font size 20px: ~${(baseMinChars * (baseFontSize / 20)).round()}-${(baseMaxChars * (baseFontSize / 20)).round()} characters per page');
-    print('Font size 22px: ~${(baseMinChars * (baseFontSize / 22)).round()}-${(baseMaxChars * (baseFontSize / 22)).round()} characters per page');
-    print('Font size 24px: ~${(baseMinChars * (baseFontSize / 24)).round()}-${(baseMaxChars * (baseFontSize / 24)).round()} characters per page');
-    print('═══════════════════════════════════════════════════════');
-
-    // REMOVED: Height-based adjustment that was overriding font-size scaling
-    // The previous logic was forcing all font sizes to use the same character count,
-    // which defeated the purpose of dynamic font-size-based pagination.
-    // Now we trust the font-size-based calculation exclusively.
-
-    // Calculate estimated pages based on character count
-    // This ensures font size changes affect pagination
     int charBasedEstimatedPages = (totalChars / maxCharsPerPage).ceil();
 
     // Use the MAXIMUM of height-based and character-based estimates
     // This ensures we respect both constraints
     int finalEstimatedPages = charBasedEstimatedPages > estimatedPages ? charBasedEstimatedPages : estimatedPages;
-
-    print('📊 Page Estimation:');
-    print('   Height-based: $estimatedPages pages');
-    print('   Character-based: $charBasedEstimatedPages pages');
-    print('   Final estimate: $finalEstimatedPages pages');
-    print('📏 Final limits -> Min chars: $minCharsPerPage, Max chars: $maxCharsPerPage');
 
     // Calculate total character count and track each span's character count
     List<int> spanCharCounts = [];
@@ -1357,6 +1358,29 @@ class _PagingWidgetState extends State<PagingWidget> {
     List<List<InlineSpan>> allPages = [];
     List<InlineSpan> currentPageList = [];
     int currentPageChars = 0;
+
+    // Helper function to check if a span is a heading/subchapter title
+    // Headings have larger font size (fontSize + 4) and bold font weight
+    bool isHeadingSpan(InlineSpan span) {
+      if (span is TextSpan) {
+        final style = span.style;
+        if (style != null) {
+          final fontSize = style.fontSize ?? 0;
+          final fontWeight = style.fontWeight;
+          final baseFontSize = _contentStyle.fontSize ?? 14;
+          // Heading has fontSize >= baseFontSize + 3 and bold/semibold weight
+          // Also check that it's not just whitespace or newlines
+          final text = span.text ?? '';
+          final trimmedText = text.trim();
+
+          final isBoldWeight = fontWeight == FontWeight.w500 || fontWeight == FontWeight.w600 || fontWeight == FontWeight.w700 || fontWeight == FontWeight.bold;
+          bool isHeading = fontSize >= baseFontSize + 3 && isBoldWeight && trimmedText.isNotEmpty;
+
+          return isHeading;
+        }
+      }
+      return false;
+    }
 
     // Calculate remaining chars from any point
     int getRemainingChars(int fromIndex) {
@@ -1378,18 +1402,22 @@ class _PagingWidgetState extends State<PagingWidget> {
       } else if (span is WidgetSpan) {
         spanPreview = '[WIDGET]';
       }
-      print('📝 Span[$i]: chars=$spanChars, pageChars=$currentPageChars, preview="$spanPreview"');
+
+      // SUBCHAPTER/HEADING DETECTION: If this span is a heading and we have content on current page,
+      // force a new page so the subchapter starts on a fresh page
+      if (isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > 0) {
+        allPages.add(List.from(currentPageList));
+        currentPageList.clear();
+        currentPageChars = 0;
+      }
 
       // Check if adding this span would exceed the max character limit
       if (currentPageChars + spanChars > maxCharsPerPage) {
-        print('⚠️ WOULD EXCEED: $currentPageChars + $spanChars = ${currentPageChars + spanChars} > $maxCharsPerPage');
-
         // ORPHAN PREVENTION: Check how much content remains after this span
         int remainingAfterThis = getRemainingChars(i + 1);
         bool wouldOrphan = remainingAfterThis > 0 && remainingAfterThis < 100;
 
         if (wouldOrphan) {
-          print('🟠 ORPHAN PREVENTION: Only $remainingAfterThis chars remain after this. Adding all to current page.');
           // Add this span and all remaining to current page to prevent orphan
           currentPageList.add(span);
           currentPageChars += spanChars;
@@ -1397,14 +1425,10 @@ class _PagingWidgetState extends State<PagingWidget> {
         }
 
         if (currentPageList.isNotEmpty && currentPageChars >= minCharsPerPage) {
-          print('🔴 PAGE BREAK! Current page has $currentPageChars chars (>= min $minCharsPerPage). Starting new page.');
-          print('   Breaking text: "$spanPreview"');
           allPages.add(List.from(currentPageList));
           currentPageList.clear();
           currentPageChars = 0;
-        } else {
-          print('🟡 NOT BREAKING: currentPageChars=$currentPageChars < minCharsPerPage=$minCharsPerPage');
-        }
+        } else {}
 
         // If the span itself fits now (on fresh page), just add it
         if (spanChars <= maxCharsPerPage) {
@@ -1504,27 +1528,13 @@ class _PagingWidgetState extends State<PagingWidget> {
       }
 
       if (hasRealContent) {
-        print('🟢 FINAL PAGE: Adding last page with $currentPageChars chars');
         allPages.add(currentPageList);
       } else {
-        print('⏭️ SKIPPING EMPTY FINAL PAGE: Only whitespace/newlines ($currentPageChars chars)');
-        // Append remaining whitespace to previous page if exists
         if (allPages.isNotEmpty) {
           allPages.last.addAll(currentPageList);
         }
       }
     }
-
-    print('═══════════════════════════════════════════════════════');
-    print('📊 PAGINATION RESULT: ${allPages.length} pages created');
-    for (int p = 0; p < allPages.length; p++) {
-      int pageChars = 0;
-      for (var s in allPages[p]) {
-        if (s is TextSpan && s.text != null) pageChars += s.text!.length;
-      }
-      print('   Page ${p + 1}: $pageChars chars');
-    }
-    print('═══════════════════════════════════════════════════════');
 
     // Convert to TextSpans
     for (var pageSpans in allPages) {
@@ -1532,14 +1542,6 @@ class _PagingWidgetState extends State<PagingWidget> {
     }
 
     _finalizePages();
-
-    print('');
-    print('🔖 ══════════════════════════════════════════════════════');
-    print('🔖 CHAPTER PAGINATION COMPLETED');
-    print('🔖 Chapter Title: "${widget.chapterTitle}"');
-    print('🔖 Total Pages Created: ${_pageSpans.length}');
-    print('🔖 Current Page Index: $_currentPageIndex');
-    print('🔖 ══════════════════════════════════════════════════════');
   }
 
   String _addHyphenIfLineBreaksMidWord(String lineText, String fullText, int endOffset) {

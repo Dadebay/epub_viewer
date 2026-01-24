@@ -37,10 +37,7 @@ class FontSizeControls extends StatelessWidget {
               child: Row(
                 children: [
                   _fontButton(context, "A", 16.sp, -1),
-                  Container(
-                      width: 1,
-                      height: 30.h,
-                      color: Colors.grey.withOpacity(0.3)),
+                  Container(width: 1, height: 30.h, color: Colors.grey.withOpacity(0.3)),
                   _fontButton(context, "A", 22.sp, 1),
                 ],
               ),
@@ -56,11 +53,8 @@ class FontSizeControls extends StatelessWidget {
             ),
             child: IconButton(
               icon: Icon(
-                Get.isDarkMode
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
-                color:
-                    Get.isDarkMode ? fontColor.withOpacity(.6) : Colors.black,
+                Get.isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                color: Get.isDarkMode ? fontColor.withOpacity(.6) : Colors.black,
                 size: 20.sp,
               ),
               onPressed: () {
@@ -68,8 +62,7 @@ class FontSizeControls extends StatelessWidget {
                 final targetDarkMode = !Get.isDarkMode;
 
                 // Change GetX theme mode
-                Get.changeThemeMode(
-                    targetDarkMode ? ThemeMode.dark : ThemeMode.light);
+                Get.changeThemeMode(targetDarkMode ? ThemeMode.dark : ThemeMode.light);
 
                 // Apply theme immediately with forced dark mode value
                 updateTheme(staticThemeId, forceDarkMode: targetDarkMode);
@@ -81,16 +74,12 @@ class FontSizeControls extends StatelessWidget {
     );
   }
 
-  Widget _fontButton(
-      BuildContext context, String label, double size, int direction,
-      {bool isDisabled = false}) {
+  Widget _fontButton(BuildContext context, String label, double size, int direction, {bool isDisabled = false}) {
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(12.r),
-        splashColor:
-            isDisabled ? Colors.transparent : Colors.grey.withOpacity(0.3),
-        highlightColor:
-            isDisabled ? Colors.transparent : Colors.grey.withOpacity(0.1),
+        splashColor: isDisabled ? Colors.transparent : Colors.grey.withOpacity(0.3),
+        highlightColor: isDisabled ? Colors.transparent : Colors.grey.withOpacity(0.1),
         onTap: isDisabled
             ? null
             : () async {
@@ -110,16 +99,6 @@ class FontSizeControls extends StatelessWidget {
                 double newSize = fontSizeProgress + (direction * 2);
                 newSize = newSize.clamp(10.0, 24.0);
 
-                // Log font size change
-                print(
-                    '═══════════════════════════════════════════════════════');
-                print('🔤 FONT SIZE CHANGED');
-                print('Previous: ${fontSizeProgress}px → New: ${newSize}px');
-                print(
-                    'Direction: ${direction > 0 ? "Increase +" : "Decrease -"}');
-                print(
-                    '═══════════════════════════════════════════════════════');
-
                 onFontSizeChange(newSize);
 
                 // Small delay to ensure loading is visible and UI has time to process
@@ -136,9 +115,7 @@ class FontSizeControls extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: size,
-              color: isDisabled
-                  ? Colors.grey.withOpacity(0.4)
-                  : (Get.isDarkMode ? fontColor.withOpacity(.6) : Colors.black),
+              color: isDisabled ? Colors.grey.withOpacity(0.4) : (Get.isDarkMode ? fontColor.withOpacity(.6) : Colors.black),
               fontWeight: FontWeight.w600,
             ),
           ),

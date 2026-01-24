@@ -43,24 +43,6 @@ class ChaptersBottomSheet extends StatefulWidget {
 class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
   @override
   Widget build(BuildContext context) {
-    // DEBUG: Print all chapter start pages when bottom sheet opens
-    print('');
-    print('📋 ════════════════════════════════════════════════════');
-    print('📋 CHAPTERS BOTTOM SHEET OPENED');
-    print('📋 Current Page: ${widget.currentPage}');
-    print('📋 Total Pages: ${widget.totalPages}');
-    print('📋 Current Page In Chapter: ${widget.currentPageInChapter}');
-    print('📋 Current Subchapter Title: ${widget.currentSubchapterTitle ?? "None"}');
-    print('📋 ────────────────────────────────────────────────────');
-    print('📋 ALL CHAPTERS WITH START PAGES:');
-    for (int i = 0; i < widget.chapters.length; i++) {
-      final ch = widget.chapters[i];
-      final prefix = ch.isSubChapter ? '   └── ' : '';
-      print('📋 [$i] ${prefix}${ch.chapter}');
-      print('     → startPage: ${ch.startPage}, pageCount: ${ch.pageCount}, pageInChapter: ${ch.pageInChapter}');
-    }
-    print('📋 ════════════════════════════════════════════════════');
-
     String allChapterText = widget.chapters.map((c) => c.chapter).join(' ');
     TextDirection textDirection = RTLHelper.getTextDirection(allChapterText);
 
@@ -221,8 +203,26 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
 
                       return InkWell(
                         onTap: () async {
+                          print('\n╔════════════════════════════════════════════════════════╗');
+                          print('║ 🖱️  CHAPTER ITEM CLICKED                              ║');
+                          print('╠════════════════════════════════════════════════════════╣');
+                          print('║ Index: $i');
+                          print('║ Chapter: "${chapter.chapter}"');
+                          print('║ Is SubChapter: ${chapter.isSubChapter}');
+                          print('║ Start Page: ${chapter.startPage}');
+                          print('║ Page Count: ${chapter.pageCount}');
+                          print('║ Page In Chapter: ${chapter.pageInChapter}');
+                          print('║ Parent Chapter Index: ${chapter.parentChapterIndex}');
+                          print('╚════════════════════════════════════════════════════════╝');
+
                           // Handle sub-chapter navigation - return Map with navigation info
                           if (chapter.isSubChapter && chapter.parentChapterIndex >= 0) {
+                            print('📌 SUBCHAPTER NAVIGATION');
+                            print('   → Returning to parent chapter: ${chapter.parentChapterIndex}');
+                            print('   → Page in chapter: ${chapter.pageInChapter}');
+                            print('   → Subchapter index: $i');
+                            print('   → Absolute start page: ${chapter.startPage}');
+
                             Navigator.of(context).pop({
                               'isSubChapter': true,
                               'chapterIndex': chapter.parentChapterIndex,
@@ -236,6 +236,7 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
 
                           // If tapping the current chapter, navigate to first page of chapter
                           if (i == bookProgress.getBookProgress(widget.bookId).currentChapterIndex) {
+                            print('📌 CURRENT CHAPTER - Going to first page');
                             Navigator.of(context).pop({
                               'isSubChapter': false,
                               'chapterIndex': i,
@@ -244,6 +245,9 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                             return;
                           }
 
+                          print('📌 MAIN CHAPTER NAVIGATION');
+                          print('   → Chapter index: $i');
+                          print('   → Starting at page 0');
                           Navigator.of(context).pop({
                             'isSubChapter': false,
                             'chapterIndex': i,
@@ -310,8 +314,7 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                                   ],
                                 ),
                               ),
-                              // Show page number ONLY if chapter has been calculated (pageCount > 0)
-                              // Don't show placeholder values that will change later
+                              // Show page number if calculated, or loading indicator if still calculating
                               if (widget.chapters[i].startPage > 0 && widget.chapters[i].pageCount > 0)
                                 Text(
                                   '${widget.chapters[i].startPage}',
@@ -325,6 +328,18 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                                             : Colors.black54,
                                     fontWeight: isCurrentChapter ? FontWeight.w600 : FontWeight.w400,
                                     fontSize: 13.sp,
+                                  ),
+                                )
+                              else if (widget.isCalculating)
+                                // Show small loading indicator while calculating
+                                SizedBox(
+                                  width: 14.w,
+                                  height: 14.h,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Get.isDarkMode ? Colors.white38 : Colors.black38,
+                                    ),
                                   ),
                                 ),
                             ],

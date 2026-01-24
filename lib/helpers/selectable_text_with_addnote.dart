@@ -47,20 +47,14 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Theme(
-      
       data: theme.copyWith(
-        textButtonTheme: TextButtonThemeData(
-            style: iosButtonStyle ?? theme.textButtonTheme.style),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-            style: iosButtonStyle ?? theme.elevatedButtonTheme.style),
-        filledButtonTheme: FilledButtonThemeData(
-            style: iosButtonStyle ?? theme.filledButtonTheme.style),
+        textButtonTheme: TextButtonThemeData(style: iosButtonStyle ?? theme.textButtonTheme.style),
+        elevatedButtonTheme: ElevatedButtonThemeData(style: iosButtonStyle ?? theme.elevatedButtonTheme.style),
+        filledButtonTheme: FilledButtonThemeData(style: iosButtonStyle ?? theme.filledButtonTheme.style),
         // Try to override button bar spacing if possible, though Selectable internals are tricky
         buttonTheme: theme.buttonTheme.copyWith(
           padding: Platform.isIOS ? EdgeInsets.zero : null,
-          shape: Platform.isIOS
-              ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero)
-              : null,
+          shape: Platform.isIOS ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero) : null,
         ),
       ),
       child: Selectable(
@@ -69,7 +63,6 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
         selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
         popupMenuItems: [
           SelectableMenuItem(
-        
             title: CosmosEpubLocalization.t('add_note'),
             isEnabled: (controller) => controller!.isTextSelected,
             handler: (controller) {
@@ -132,8 +125,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
     formatted = formatted.replaceAll('\u200B', ''); // Zero-width space
     formatted = formatted.replaceAll('\u2009', ' '); // Thin space
     formatted = formatted.replaceAll('\u202F', ' '); // Narrow no-break space
-    formatted =
-        formatted.replaceAll(RegExp(r'[ \t\u00A0\u200B\u2009\u202F]+'), ' ');
+    formatted = formatted.replaceAll(RegExp(r'[ \t\u00A0\u200B\u2009\u202F]+'), ' ');
 
     // Remove spaces at the beginning and end of lines
     formatted = formatted.replaceAll(RegExp(r'^\s+', multiLine: true), '');
@@ -191,9 +183,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
           String current = word[i];
           String next = i < word.length - 1 ? word[i + 1] : '';
 
-          bool currentIsConsonant =
-              RegExp(r'[бвгджзклмнпрстфхцчшщБВГДЖЗКЛМНПРСТФХЦЧШЩ]')
-                  .hasMatch(current);
+          bool currentIsConsonant = RegExp(r'[бвгджзклмнпрстфхцчшщБВГДЖЗКЛМНПРСТФХЦЧШЩ]').hasMatch(current);
           bool nextIsVowel = RegExp(r'[аэоуиыяюеёАЭОУИЫЯЮЕЁ]').hasMatch(next);
 
           if (currentIsConsonant && nextIsVowel && (i % 3 == 0 || i % 4 == 0)) {
@@ -275,11 +265,8 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
         child: Obx(() => Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.black
-                    : Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -291,8 +278,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
                       children: [
                         Text(
                           CosmosEpubLocalization.t('note'),
-                          style: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                         ),
                         TextButton(
                           onPressed: () async {
@@ -300,9 +286,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
                             Navigator.pop(context);
                             await CosmosEpub.addNote(
                               bookId: bookId,
-                              selectedText: note.isEmpty
-                                  ? selectedText
-                                  : '$selectedText\n\n$note',
+                              selectedText: note.isEmpty ? selectedText : '$selectedText\n\n$note',
                               context: context,
                             );
                           },
@@ -310,10 +294,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
                             CosmosEpubLocalization.t('done'),
                             style: TextStyle(
                               fontSize: 17,
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.white
-                                  : Colors.black,
+                              color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -323,8 +304,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
                   ),
                   // Selected text display with left border
                   Container(
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       border: Border(
@@ -359,12 +339,9 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
                   ),
                   // Color picker - always visible above keyboard
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.black
-                          : Colors.white,
+                      color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                       border: Border(
                         top: BorderSide(
                           color: Colors.grey.withValues(alpha: 0.3),
@@ -393,11 +370,7 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
                                     shape: BoxShape.circle,
                                     border: selectedColor.value == color
                                         ? Border.all(
-                                            color:
-                                                Theme.of(context).brightness ==
-                                                        Brightness.dark
-                                                    ? Colors.white
-                                                    : Colors.black,
+                                            color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
                                             width: 3,
                                           )
                                         : null,
@@ -505,8 +478,7 @@ class BookPageBuilder {
 
         if (widget is Container) {
           // Check if container has centered alignment (quote style)
-          if (widget.alignment == Alignment.centerRight ||
-              widget.alignment == Alignment.center) {
+          if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
             quoteSpans++;
           }
           // Check margin - quotes often have left margin
@@ -534,8 +506,7 @@ class BookPageBuilder {
 
     if (widget is Container) {
       // Check alignment
-      if (widget.alignment == Alignment.centerRight ||
-          widget.alignment == Alignment.center) {
+      if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
         return true;
       }
       // Check margin - quotes often have left margin
@@ -615,9 +586,7 @@ class BookPageBuilder {
     }
 
     // Arabic numerals as section dividers (1, 2, 3, etc. or 1., 2., 3., etc.)
-    if (RegExp(r'^\d+\.?$').hasMatch(trimmed) ||
-        RegExp(r'^\(\d+\)$').hasMatch(trimmed) ||
-        RegExp(r'^\d+\)$').hasMatch(trimmed)) {
+    if (RegExp(r'^\d+\.?$').hasMatch(trimmed) || RegExp(r'^\(\d+\)$').hasMatch(trimmed) || RegExp(r'^\d+\)$').hasMatch(trimmed)) {
       return true;
     }
 
@@ -626,11 +595,7 @@ class BookPageBuilder {
 
   /// Check if page has regular text followed by a quote at the end
   /// Returns split info: (hasTextThenQuote, regularContentSpans, quoteContentSpans)
-  static ({
-    bool hasTextThenQuote,
-    List<InlineSpan> regularContent,
-    List<InlineSpan> quoteContent
-  }) _analyzePageContent(TextSpan contentSpan) {
+  static ({bool hasTextThenQuote, List<InlineSpan> regularContent, List<InlineSpan> quoteContent}) _analyzePageContent(TextSpan contentSpan) {
     final children = contentSpan.children;
     if (children == null || children.isEmpty) {
       return (hasTextThenQuote: false, regularContent: [], quoteContent: []);
@@ -707,8 +672,7 @@ class BookPageBuilder {
         }
 
         // Skip whitespace-only spans
-        if (text.trim().isEmpty &&
-            (span.children == null || span.children!.isEmpty)) {
+        if (text.trim().isEmpty && (span.children == null || span.children!.isEmpty)) {
           if (inQuoteSection) {
             continue;
           } else {
@@ -755,9 +719,7 @@ class BookPageBuilder {
           for (var child in span.children!) {
             if (child is TextSpan) {
               final childText = child.text ?? '';
-              if (childText.trim().isNotEmpty &&
-                  childText.trim().length > 10 &&
-                  !_isSectionDivider(childText)) {
+              if (childText.trim().isNotEmpty && childText.trim().length > 10 && !_isSectionDivider(childText)) {
                 hasRegularContent = true;
                 break;
               }
@@ -772,8 +734,7 @@ class BookPageBuilder {
           final widget = span.child;
           if (widget is Container) {
             // If container has centerRight alignment, it's a quote, skip it
-            if (widget.alignment == Alignment.centerRight ||
-                widget.alignment == Alignment.center) {
+            if (widget.alignment == Alignment.centerRight || widget.alignment == Alignment.center) {
               continue;
             }
           }
@@ -788,16 +749,10 @@ class BookPageBuilder {
     }
 
     // Split content
-    final regularContent =
-        children.sublist(0, quoteStartIndex).cast<InlineSpan>().toList();
-    final quoteContent =
-        children.sublist(quoteStartIndex).cast<InlineSpan>().toList();
+    final regularContent = children.sublist(0, quoteStartIndex).cast<InlineSpan>().toList();
+    final quoteContent = children.sublist(quoteStartIndex).cast<InlineSpan>().toList();
 
-    return (
-      hasTextThenQuote: true,
-      regularContent: regularContent,
-      quoteContent: quoteContent
-    );
+    return (hasTextThenQuote: true, regularContent: regularContent, quoteContent: quoteContent);
   }
 
   // NEW METHOD: Build page with TextSpan (for mixed text + images)
@@ -891,8 +846,7 @@ class BookPageBuilder {
                       Selectable(
                         selectWordOnLongPress: true,
                         selectWordOnDoubleTap: true,
-                        selectionColor:
-                            const Color(0xFFB8B3E9).withValues(alpha: 0.5),
+                        selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
                         popupMenuItems: _buildPopupMenuItems(context, bookId),
                         child: RichText(
                           textAlign: TextAlign.left,
@@ -907,14 +861,11 @@ class BookPageBuilder {
                           child: Selectable(
                             selectWordOnLongPress: true,
                             selectWordOnDoubleTap: true,
-                            selectionColor:
-                                const Color(0xFFB8B3E9).withValues(alpha: 0.5),
-                            popupMenuItems:
-                                _buildPopupMenuItems(context, bookId),
+                            selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
+                            popupMenuItems: _buildPopupMenuItems(context, bookId),
                             child: RichText(
                               textAlign: TextAlign.center,
-                              text:
-                                  TextSpan(children: pageAnalysis.quoteContent),
+                              text: TextSpan(children: pageAnalysis.quoteContent),
                             ),
                           ),
                         ),
@@ -938,8 +889,7 @@ class BookPageBuilder {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: style.copyWith(
-                            fontSize:
-                                (style.fontSize ?? 16) - 2, // Smaller title
+                            fontSize: (style.fontSize ?? 16) - 2, // Smaller title
                             fontWeight: FontWeight.w400,
                             height: 1.0, // Tighter spacing
 
@@ -969,14 +919,11 @@ class BookPageBuilder {
                     // If quote-only page, center vertically; otherwise top-align
                     Expanded(
                       child: Container(
-                        alignment: isQuoteOnlyPage
-                            ? Alignment.center
-                            : Alignment.topLeft,
+                        alignment: isQuoteOnlyPage ? Alignment.center : Alignment.topLeft,
                         child: Selectable(
                           selectWordOnLongPress: true,
                           selectWordOnDoubleTap: true,
-                          selectionColor:
-                              const Color(0xFFB8B3E9).withValues(alpha: 0.5),
+                          selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
                           popupMenuItems: _buildPopupMenuItems(context, bookId),
                           // For quote-only pages, don't force full height - let alignment work
                           child: isQuoteOnlyPage
@@ -990,8 +937,7 @@ class BookPageBuilder {
                               : LayoutBuilder(
                                   builder: (context, constraints) {
                                     return Container(
-                                      constraints: BoxConstraints(
-                                          minHeight: constraints.maxHeight),
+                                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
                                       child: RichText(
                                         textAlign: TextAlign.left,
                                         text: contentSpan,
@@ -1012,8 +958,7 @@ class BookPageBuilder {
   }
 
   /// Build popup menu items for text selection
-  static List<SelectableMenuItem> _buildPopupMenuItems(
-      BuildContext context, String bookId) {
+  static List<SelectableMenuItem> _buildPopupMenuItems(BuildContext context, String bookId) {
     return [
       SelectableMenuItem(
         title: CosmosEpubLocalization.t('add_note'),
@@ -1051,13 +996,11 @@ class BookPageBuilder {
     ];
   }
 
-  static Future<void> _handleAddNoteFromSpan(
-      BuildContext context, String bookId, String selectedText) async {
+  static Future<void> _handleAddNoteFromSpan(BuildContext context, String bookId, String selectedText) async {
     _showAddNoteBottomSheetFromSpan(context, bookId, selectedText);
   }
 
-  static void _showAddNoteBottomSheetFromSpan(
-      BuildContext context, String bookId, String selectedText) {
+  static void _showAddNoteBottomSheetFromSpan(BuildContext context, String bookId, String selectedText) {
     final textController = TextEditingController(text: '');
     final selectedColor = Colors.blue.obs;
 
@@ -1074,11 +1017,8 @@ class BookPageBuilder {
         child: Obx(() => Container(
               height: MediaQuery.of(context).size.height * 0.9,
               decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.black
-                    : Colors.white,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
               ),
               child: Column(
                 children: [
@@ -1090,8 +1030,7 @@ class BookPageBuilder {
                       children: [
                         Text(
                           CosmosEpubLocalization.t('note'),
-                          style: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                         ),
                         TextButton(
                           onPressed: () async {
@@ -1099,9 +1038,7 @@ class BookPageBuilder {
                             Navigator.pop(context);
                             await CosmosEpub.addNote(
                               bookId: bookId,
-                              selectedText: note.isEmpty
-                                  ? selectedText
-                                  : '$selectedText\n\n$note',
+                              selectedText: note.isEmpty ? selectedText : '$selectedText\n\n$note',
                               context: context,
                             );
                           },
@@ -1109,10 +1046,7 @@ class BookPageBuilder {
                             CosmosEpubLocalization.t('done'),
                             style: TextStyle(
                               fontSize: 17,
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? Colors.white
-                                  : Colors.black,
+                              color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1122,8 +1056,7 @@ class BookPageBuilder {
                   ),
                   // Selected text display with left border
                   Container(
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       border: Border(
@@ -1159,12 +1092,9 @@ class BookPageBuilder {
 
                   // Color picker - always visible above keyboard
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.black
-                          : Colors.white,
+                      color: Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white,
                       border: Border(
                         top: BorderSide(
                           color: Colors.grey.withValues(alpha: 0.3),
@@ -1193,11 +1123,7 @@ class BookPageBuilder {
                                     shape: BoxShape.circle,
                                     border: selectedColor.value == color
                                         ? Border.all(
-                                            color:
-                                                Theme.of(context).brightness ==
-                                                        Brightness.dark
-                                                    ? Colors.white
-                                                    : Colors.black,
+                                            color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
                                             width: 3,
                                           )
                                         : null,
@@ -1240,8 +1166,7 @@ class BookPageBuilder {
     cleaned = cleaned.replaceAll('\uFEFF', ''); // Zero-width no-break space
 
     // Remove excessive spaces
-    cleaned =
-        cleaned.replaceAll(RegExp(r'[ \t\u00A0\u200B\u2009\u202F]+'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'[ \t\u00A0\u200B\u2009\u202F]+'), ' ');
     cleaned = cleaned.replaceAll(RegExp(r' {2,}'), ' ');
 
     // Clean up line breaks

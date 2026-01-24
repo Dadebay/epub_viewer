@@ -17,7 +17,6 @@ import 'helpers/epub_chapter_list_builder.dart';
 import 'helpers/epub_toc_helper.dart';
 import 'helpers/epub_theme_helper.dart';
 import 'helpers/epub_content_helper.dart';
-import 'helpers/epub_background_calculator.dart';
 import 'widgets/epub_bottom_nav_widget.dart';
 import 'widgets/epub_header_widget.dart';
 
@@ -49,7 +48,7 @@ Color backColor = Colors.white;
 Color fontColor = Colors.black;
 Color buttonBackgroundColor = const Color(0xFFEAEAEB);
 Color buttonIconColor = const Color(0xFF252527);
-int staticThemeId = 3;
+int staticThemeId = 1;
 
 class ShowEpub extends StatefulWidget {
   ShowEpub({
@@ -231,72 +230,6 @@ class ShowEpubState extends State<ShowEpub> {
     _filteredToOriginalIndex = result['filteredToOriginalIndex'] as Map<int, int>;
     _updateChapterPageNumbers();
 
-    // DEBUG: Print Navigation/TOC info
-    print('📋 ============= EPUB NAVIGATION (TOC) =============');
-    if (epubBook.Schema?.Navigation?.NavMap?.Points != null) {
-      final points = epubBook.Schema!.Navigation!.NavMap!.Points!;
-      print('📋 Total NavMap Points: ${points.length}');
-      for (int i = 0; i < points.length; i++) {
-        final point = points[i];
-        final source = point.Content?.Source ?? 'null';
-        final label = point.NavigationLabels?.isNotEmpty == true ? point.NavigationLabels!.first.Text : 'null';
-        print('📋 [$i] Label: "$label" | Source: $source');
-
-        // Print nested children if any
-        if (point.ChildNavigationPoints != null && point.ChildNavigationPoints!.isNotEmpty) {
-          for (int j = 0; j < point.ChildNavigationPoints!.length; j++) {
-            final child = point.ChildNavigationPoints![j];
-            final childSource = child.Content?.Source ?? 'null';
-            final childLabel = child.NavigationLabels?.isNotEmpty == true ? child.NavigationLabels!.first.Text : 'null';
-            print('📋    └── Child[$j]: "$childLabel" | Source: $childSource');
-          }
-        }
-      }
-    } else {
-      print('📋 No Navigation/TOC found in EPUB');
-    }
-    print('📋 ==================================================');
-
-    // DEBUG: Print original EPUB chapters
-    print('📕 ============= ORIGINAL EPUB CHAPTERS =============');
-    print('📕 Total EPUB chapters: ${_chapters.length}');
-    for (int i = 0; i < _chapters.length; i++) {
-      final ch = _chapters[i];
-      final htmlLen = ch.HtmlContent?.length ?? 0;
-      final subCount = ch.SubChapters?.length ?? 0;
-      print('📕 [$i] Title: "${ch.Title}" | ContentFileName: ${ch.ContentFileName} | HTML length: $htmlLen | SubChapters: $subCount');
-
-      // Print subchapters
-      if (ch.SubChapters != null && ch.SubChapters!.isNotEmpty) {
-        for (int j = 0; j < ch.SubChapters!.length; j++) {
-          final sub = ch.SubChapters![j];
-          print('📕    └── SubChapter[$j]: "${sub.Title}" | ContentFileName: ${sub.ContentFileName}');
-        }
-      }
-    }
-    print('📕 ===================================================');
-
-    // DEBUG: Print built chapters list
-    print('📚 ============= BUILT CHAPTERS LIST =============');
-    print('📚 Total built chapters: ${chaptersList.length}');
-    for (int i = 0; i < chaptersList.length; i++) {
-      final ch = chaptersList[i];
-      final prefix = ch.isSubChapter ? '   └── ' : '';
-      print('📚 [$i] ${prefix}${ch.chapter} (startPage: ${ch.startPage}, pageCount: ${ch.pageCount}, isSubChapter: ${ch.isSubChapter})');
-    }
-    print('📚 filteredToOriginalIndex: $_filteredToOriginalIndex');
-
-    // Calculate and show total pages in book
-    int totalBookPages = 0;
-    for (final ch in chaptersList) {
-      totalBookPages += ch.pageCount;
-    }
-    print('📚 ───────────────────────────────────────────────');
-    print('📚 TOTAL PAGES IN BOOK: $totalBookPages');
-    print('📚 ───────────────────────────────────────────────');
-    print('📚 ================================================');
-    // No background calculation - pages are calculated as chapters are read
-
     final progress = bookProgress.getBookProgress(bookId);
     final savedChapter = progress.currentChapterIndex ?? 0;
     final savedPage = progress.currentPageIndex ?? 0;
@@ -327,19 +260,6 @@ class ShowEpubState extends State<ShowEpub> {
   }
 
   updateContentAccordingChapter(int chapterIndex) async {
-    print('');
-    print('📖 ════════════════════════════════════════════════════');
-    print('📖 CHAPTER CHANGE TRIGGERED');
-    print('📖 Chapter Index: $chapterIndex');
-    if (chapterIndex >= 0 && chapterIndex < chaptersList.length) {
-      final ch = chaptersList[chapterIndex];
-      print('📖 Chapter Name: "${ch.chapter}"');
-      print('📖 Start Page: ${ch.startPage}');
-      print('📖 Page Count: ${ch.pageCount}');
-      print('📖 Is SubChapter: ${ch.isSubChapter}');
-    }
-    print('📖 ════════════════════════════════════════════════════');
-
     final currentSavedIndex = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     if (currentSavedIndex != chapterIndex) {
       await bookProgress.setCurrentChapterIndex(bookId, chapterIndex);
@@ -411,8 +331,8 @@ class ShowEpubState extends State<ShowEpub> {
     accumulatedPagesBeforeCurrentChapter = 0;
     gs.remove('book_${bookId}_page_counts');
 
-    // Kick off background calculation so loading can finish
-    _startBackgroundCalculation();
+    // Kick off REAL pagination calculation so loading can finish
+    _startRealPaginationCalculation();
   }
 
   void changeFontSize(double newSize) {
@@ -793,58 +713,66 @@ class ShowEpubState extends State<ShowEpub> {
     if (allChaptersCalculated.value && totalPagesInBook > 0) {
       controllerPaging.totalPages.value = totalPagesInBook;
     } else {
-      // Start background calculation for missing chapters
-      _startBackgroundCalculation();
+      // Start REAL pagination calculation for all chapters (not estimation)
+      _startRealPaginationCalculation();
     }
   }
 
-  void _startBackgroundCalculation() async {
-    if (!mounted) return;
+  void _startRealPaginationCalculation() {
     if (_isBackgroundCalcRunning) return;
 
-    _isBackgroundCalcRunning = true;
-    isCalculatingTotalPages = true;
+    // Use addPostFrameCallback to ensure we have the correct screen dimensions
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (_isBackgroundCalcRunning) return;
 
-    final results = await EpubBackgroundCalculator.calculateAllChaptersInBackground(
-      chapters: _chapters,
-      fontSize: _fontSize,
-      existingPageCounts: chapterPageCounts,
-      onChapterCalculated: (chapterIndex, pages) {
-        if (!mounted) return;
-        // Only update if not already calculated with real pagination
-        if (!chapterPageCounts.containsKey(chapterIndex)) {
+      _isBackgroundCalcRunning = true;
+      isCalculatingTotalPages = true;
+      if (mounted) setState(() {});
+
+      // Get actual page size from screen dimensions
+      final screenWidth = MediaQuery.of(context).size.width;
+      final screenHeight = MediaQuery.of(context).size.height;
+      final pageSize = Size(screenWidth, screenHeight);
+
+      final results = await _paginationHelper.precalculateAllChapters(
+        existingPageCounts: chapterPageCounts,
+        pageSize: pageSize,
+        onChapterCalculated: (chapterIndex, pages) {
+          if (!mounted) return;
           chapterPageCounts[chapterIndex] = pages;
           _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
           totalPagesInBook = _cachedKnownPagesTotal;
+
+          // Update chapter page numbers after each calculation
           _updateChapterPageNumbers();
-        }
-      },
-      shouldContinue: () => mounted,
-      verbose: false,
-    );
+          if (mounted) setState(() {});
+        },
+        shouldStop: () => !mounted,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    // Update all calculated values
-    for (var entry in results.entries) {
-      if (!chapterPageCounts.containsKey(entry.key)) {
+      // Update all calculated values
+      for (var entry in results.entries) {
         chapterPageCounts[entry.key] = entry.value;
       }
-    }
 
-    _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
-    totalPagesInBook = _cachedKnownPagesTotal;
-    allChaptersCalculated.value = chapterPageCounts.length == _chapters.length;
+      _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
+      totalPagesInBook = _cachedKnownPagesTotal;
+      allChaptersCalculated.value = chapterPageCounts.length == _chapters.length;
 
-    if (allChaptersCalculated.value) {
-      controllerPaging.totalPages.value = totalPagesInBook;
-      _saveCachedPageCounts();
-    }
+      if (allChaptersCalculated.value) {
+        controllerPaging.totalPages.value = totalPagesInBook;
+        _saveCachedPageCounts();
+      }
 
-    _updateChapterPageNumbers();
+      _updateChapterPageNumbers();
 
-    _isBackgroundCalcRunning = false;
-    isCalculatingTotalPages = !allChaptersCalculated.value && _isBackgroundCalcRunning;
+      _isBackgroundCalcRunning = false;
+      isCalculatingTotalPages = false;
+      if (mounted) setState(() {});
+    });
   }
 
   void _saveCachedPageCounts() {
@@ -927,6 +855,37 @@ class ShowEpubState extends State<ShowEpub> {
       _hasAppliedAudioSync = true;
     }
 
+    // Collect ALL chapter and subchapter titles to match against in the text
+    // This helps identify headings that should be bold in the rendered content
+    List<String> subchapterTitles = [];
+
+    // Find the list index of the current chapter (not the original epub index)
+    int currentListIndex = -1;
+    for (int i = 0; i < chaptersList.length; i++) {
+      if (!chaptersList[i].isSubChapter) {
+        final originalIdx = _filteredToOriginalIndex[i];
+        if (originalIdx == currentChapterIndex) {
+          currentListIndex = i;
+          break;
+        }
+      }
+    }
+
+    // Collect subchapter titles that belong to the current chapter
+    for (var chapter in chaptersList) {
+      if (chapter.isSubChapter && chapter.parentChapterIndex == currentListIndex) {
+        subchapterTitles.add(chapter.chapter);
+      }
+    }
+
+    // Also add ALL chapter titles (both main chapters and subchapters) for matching
+    // This ensures any chapter/subchapter title appearing in text will be detected
+    for (var chapter in chaptersList) {
+      if (!subchapterTitles.contains(chapter.chapter)) {
+        subchapterTitles.add(chapter.chapter);
+      }
+    }
+
     return PagingWidget(
       textContent,
       epubBook: epubBook,
@@ -950,6 +909,7 @@ class ShowEpubState extends State<ShowEpub> {
       totalChapters: chaptersList.length,
       bookId: bookId,
       showNavBar: showHeader,
+      subchapterTitles: subchapterTitles,
     );
   }
 
@@ -1017,13 +977,8 @@ class ShowEpubState extends State<ShowEpub> {
         onNextPage: () => controllerPaging.goToNextPage(),
         onPreviousPage: () => controllerPaging.goToPreviousPage(),
         onJumpToPage: (targetPageInBook) {
-          debugPrint('\n📖 onJumpToPage callback:');
-          debugPrint('   targetPageInBook: $targetPageInBook');
-          debugPrint('   current totalPages: ${controllerPaging.totalPages.value}');
           final result = _calculateChapterAndPageFromBookPage(targetPageInBook);
-          debugPrint('   result: $result');
           if (result != null) {
-            debugPrint('   ✅ Calling reLoadChapter(index: ${result['chapter']}, startPage: ${result['page']})');
             // Preserve the target page and total pages so they're displayed after chapter loads
             final filteredIndex = _originalToFilteredIndex(result['chapter']!);
             _setJumpLock(
@@ -1033,9 +988,7 @@ class ShowEpubState extends State<ShowEpub> {
               pageInChapter: result['page']!,
             );
             reLoadChapter(index: filteredIndex, startPage: result['page']!);
-          } else {
-            debugPrint('   ❌ result is null - not reloading chapter');
-          }
+          } else {}
         },
         onFontSettingsPressed: () {},
         fontSize: _fontSize,
