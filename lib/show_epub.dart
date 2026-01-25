@@ -120,6 +120,7 @@ class ShowEpubState extends State<ShowEpub> {
   int _currentChapterPageCount = 0;
   String? _currentSubchapterTitle;
   bool _isSubchapterTitleLocked = false; // Lock subchapter title when navigating via TOC
+  bool _isInitialPageLoad = false; // Track if this is the first page load after TOC navigation
   Map<int, int> _filteredToOriginalIndex = {};
   double _fontSize = 14.0;
   bool _hasAppliedAudioSync = false;
@@ -435,6 +436,7 @@ class ShowEpubState extends State<ShowEpub> {
         _currentSubchapterTitle = title;
         // TOC'dan subchapter seçildiğinde lock'ı aktif et
         _isSubchapterTitleLocked = title != null;
+        _isInitialPageLoad = title != null; // Mark as initial load if going to subchapter
       },
     );
   }
@@ -737,27 +739,54 @@ class ShowEpubState extends State<ShowEpub> {
     );
   }
 
+  /// Get the parent chapter title for pagination parsing
+  /// This should NEVER return the subchapter title, only the main chapter title
+  String _getParentChapterTitleForParsing(int currentChapterIndex) {
+    if (currentChapterIndex < 0 || currentChapterIndex >= chaptersList.length) {
+      return '';
+    }
+    // Always return the main chapter title, never the subchapter
+    return chaptersList[currentChapterIndex].chapter;
+  }
+
   void _updateSubchapterTitleForPage(int currentChapterIndex, int pageInChapter) {
-    // Detect subchapter based on current page
-    final detectedSubchapter = _chapterHelper.updateSubchapterTitleForPage(
-      currentChapterIndex: currentChapterIndex,
-      pageInChapter: pageInChapter,
-      chaptersList: chaptersList,
-    );
+    print('🔎 _updateSubchapterTitleForPage called: chapterIdx=$currentChapterIndex, pageInChapter=$pageInChapter');
 
     // If subchapter title is locked (from TOC navigation)
     if (_isSubchapterTitleLocked && _currentSubchapterTitle != null) {
-      // Check if we're still in the same subchapter
-      if (detectedSubchapter == _currentSubchapterTitle) {
-        // Still in locked subchapter, keep lock
+      // If this is the initial page load, keep the lock and skip detection
+      if (_isInitialPageLoad) {
+        print('🔒 Subchapter locked (initial load): "${_currentSubchapterTitle}" (pageInChapter: $pageInChapter)');
+        _isInitialPageLoad = false; // Clear flag after first callback
         return;
-      } else {
-        // Left the locked subchapter, unlock and update
-        _isSubchapterTitleLocked = false;
       }
+
+      // After initial load, release lock to allow natural subchapter detection
+      print('🔓 Releasing subchapter lock after initial load');
+      _isSubchapterTitleLocked = false;
     }
 
-    _currentSubchapterTitle = detectedSubchapter;
+    // Get the original chapter index for accessing the subchapter map
+    final originalChapterIndex = _filteredToOriginalIndex[currentChapterIndex] ?? currentChapterIndex;
+
+    // Use the actual paginated subchapter map instead of LocalChapterModel pageInChapter
+    final subchapterMap = _subchapterPageMapByChapter[originalChapterIndex];
+
+    // Detect subchapter based on current page using the actual pagination data
+    final detectedSubchapter = _chapterHelper.updateSubchapterTitleForPageWithMap(
+      currentChapterIndex: currentChapterIndex,
+      pageInChapter: pageInChapter,
+      chaptersList: chaptersList,
+      subchapterPageMap: subchapterMap,
+    );
+
+    print('🔎 Detected subchapter: "$detectedSubchapter" (current: "$_currentSubchapterTitle")');
+
+    if (_currentSubchapterTitle != detectedSubchapter) {
+      print('🔄 Subchapter changed: "${_currentSubchapterTitle}" -> "$detectedSubchapter" (page: $pageInChapter)');
+      _currentSubchapterTitle = detectedSubchapter;
+      setState(() {}); // Force UI rebuild when subchapter changes
+    }
   }
 
   List<EpubChapter> get _chapters => epubBook.Chapters ?? <EpubChapter>[];
@@ -1033,7 +1062,7 @@ class ShowEpubState extends State<ShowEpub> {
       onPageFlip: _handlePageFlip,
       onLastPage: _handleLastPage,
       onPaginationComplete: _handleSubchapterPageMapping,
-      chapterTitle: _getChapterTitleForDisplay(currentChapterIndex),
+      chapterTitle: _getParentChapterTitleForParsing(currentChapterIndex),
       totalChapters: chaptersList.length,
       bookId: bookId,
       showNavBar: showHeader,

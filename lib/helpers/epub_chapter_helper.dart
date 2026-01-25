@@ -300,12 +300,19 @@ class EpubChapterHelper {
       }
     }
 
+    print('🔍 updateSubchapterTitleForPage: chapterIdx=$currentChapterIndex, page=$pageInChapter, found ${currentSubchapters.length} subchapters');
+
     if (currentSubchapters.isEmpty) {
       return null;
     }
 
     // Sort by pageInChapter
     currentSubchapters.sort((a, b) => a.pageInChapter.compareTo(b.pageInChapter));
+
+    print('📋 Subchapters for chapter $currentChapterIndex:');
+    for (var sub in currentSubchapters) {
+      print('   - "${sub.chapter}" starts at page ${sub.pageInChapter}');
+    }
 
     // Find the subchapter we're currently in
     for (int i = 0; i < currentSubchapters.length; i++) {
@@ -319,15 +326,69 @@ class EpubChapterHelper {
           // If we haven't reached the next subchapter yet
           if (pageInChapter < nextSubchapter.pageInChapter) {
             foundSubchapterTitle = subchapter.chapter;
+            print('✅ Found subchapter: "${foundSubchapterTitle}" (page $pageInChapter is between ${subchapter.pageInChapter} and ${nextSubchapter.pageInChapter})');
             break;
           }
         } else {
           // This is the last subchapter, we're in it
           foundSubchapterTitle = subchapter.chapter;
+          print('✅ Found last subchapter: "${foundSubchapterTitle}" (page $pageInChapter >= ${subchapter.pageInChapter})');
         }
       }
     }
 
+    print('🎯 Returning subchapter: "$foundSubchapterTitle"');
+    return foundSubchapterTitle;
+  }
+
+  /// Update subchapter title based on current page position using actual pagination map
+  /// This uses the _subchapterPageMapByChapter which contains actual paginated offsets
+  String? updateSubchapterTitleForPageWithMap({
+    required int currentChapterIndex,
+    required int pageInChapter,
+    required List<LocalChapterModel> chaptersList,
+    Map<String, int>? subchapterPageMap,
+  }) {
+    if (subchapterPageMap == null || subchapterPageMap.isEmpty) {
+      print('🔍 No subchapter map available for chapter $currentChapterIndex');
+      return null;
+    }
+
+    print('🔍 updateSubchapterTitleForPageWithMap: chapterIdx=$currentChapterIndex, page=$pageInChapter');
+    print('📋 Subchapter map: $subchapterPageMap');
+
+    // Convert map to sorted list of entries
+    final sortedEntries = subchapterPageMap.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+
+    String? foundSubchapterTitle;
+
+    // Find the subchapter we're currently in
+    for (int i = 0; i < sortedEntries.length; i++) {
+      final entry = sortedEntries[i];
+      final subchapterTitle = entry.key;
+      final subchapterStartPage = entry.value;
+
+      // If we're at or after this subchapter's page
+      if (pageInChapter >= subchapterStartPage) {
+        // Check if there's a next subchapter
+        if (i + 1 < sortedEntries.length) {
+          final nextEntry = sortedEntries[i + 1];
+          final nextStartPage = nextEntry.value;
+          // If we haven't reached the next subchapter yet
+          if (pageInChapter < nextStartPage) {
+            foundSubchapterTitle = subchapterTitle;
+            print('✅ Found subchapter: "$foundSubchapterTitle" (page $pageInChapter is between $subchapterStartPage and $nextStartPage)');
+            break;
+          }
+        } else {
+          // This is the last subchapter, we're in it
+          foundSubchapterTitle = subchapterTitle;
+          print('✅ Found last subchapter: "$foundSubchapterTitle" (page $pageInChapter >= $subchapterStartPage)');
+        }
+      }
+    }
+
+    print('🎯 Returning subchapter from map: "$foundSubchapterTitle"');
     return foundSubchapterTitle;
   }
 

@@ -234,20 +234,28 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                       final chapter = widget.chapters[i];
                       final currentChapterIndex = bookProgress.getBookProgress(widget.bookId).currentChapterIndex ?? 0;
 
-                      // Highlight logic:
-                      // 1. If we have a currentSubchapterTitle, highlight the subchapter that matches
-                      // 2. If no currentSubchapterTitle, highlight the main chapter we're in
+                      // Debug: Print current state
+                      if (i == 0) {
+                        print('🔍 BOTTOM SHEET DEBUG:');
+                        print('   currentSubchapterTitle: "${widget.currentSubchapterTitle}"');
+                        print('   currentChapterIndex: $currentChapterIndex');
+                        print('   currentPageInChapter: ${widget.currentPageInChapter}');
+                      }
+
+                      // Highlight logic - simplified to use chapter index instead of title matching
                       bool isCurrentChapter = false;
 
                       if (widget.currentSubchapterTitle != null && widget.currentSubchapterTitle!.isNotEmpty) {
-                        // We're inside a subchapter - only highlight the matching subchapter
+                        // We're inside a subchapter - highlight based on title match
                         if (chapter.isSubChapter && chapter.chapter == widget.currentSubchapterTitle) {
                           isCurrentChapter = true;
+                          print('✅ ACTIVE SUBCHAPTER: "${chapter.chapter}" (index: $i, title match)');
                         }
                       } else {
-                        // No subchapter selected - highlight the main chapter
+                        // No subchapter - highlight the main chapter by index
                         if (!chapter.isSubChapter && currentChapterIndex == i) {
                           isCurrentChapter = true;
+                          print('✅ ACTIVE CHAPTER: "${chapter.chapter}" (index: $i)');
                         }
                       }
 

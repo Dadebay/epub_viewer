@@ -20,9 +20,6 @@ class NodeParser {
     required this.onImageNode,
   }) {
     HyphenatorHelper.instance.initialize();
-    print('📖 NodeParser initialized:');
-    print('   Chapter Title: "$chapterTitle"');
-    print('   Subchapter Titles: ${subchapterTitles.map((t) => '"$t"').join(', ')}');
   }
 
   Future<InlineSpan> parseNode(dom.Node node, double maxWidth, {bool isPoetry = false}) async {
