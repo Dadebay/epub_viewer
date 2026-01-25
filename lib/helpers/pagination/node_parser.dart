@@ -108,11 +108,29 @@ class NodeParser {
     final isShortText = paragraphText.isNotEmpty && paragraphText.length < 80;
     final hasNoLineBreaks = !paragraphText.contains('\n');
     final normalizedParagraph = HtmlParsingHelpers.normalizeTitle(paragraphText);
+    final paragraphLower = paragraphText.toLowerCase().trim();
+
+    // ========== AUTHOR NAME TESPİTİ ==========
+    // Eğer metin sadece isim/soyisim formatındaysa ve kitap başlığı içermiyorsa, author name'dir
+    bool isLikelyAuthorName = false;
+    if (isShortText && hasNoLineBreaks) {
+      final words = paragraphText.split(RegExp(r'\s+'));
+      // 1-3 kelime, hepsi büyük harfle başlıyorsa ve kitap başlığı kelimeleri yok
+      if (words.length >= 1 && words.length <= 3) {
+        final allCapitalized = words.every((w) => w.isNotEmpty && w[0] == w[0].toUpperCase());
+        final hasBookKeywords =
+            paragraphLower.contains('пять') || paragraphLower.contains('пороков') || paragraphLower.contains('команды') || paragraphLower.contains('притчи') || paragraphLower.contains('лидерстве');
+        if (allCapitalized && !hasBookKeywords) {
+          isLikelyAuthorName = true;
+          print('👤 AUTHOR NAME tespit edildi: "$paragraphText" - bold YAPILMAYACAK');
+        }
+      }
+    }
+    // ========== AUTHOR NAME TESPİTİ SONU ==========
 
     // ========== BASIT VE AGRESIF EŞLEŞME ==========
     // Tüm başlıkları küçük harfe çevir ve karşılaştır
     final allTitles = [chapterTitle, ...subchapterTitles];
-    final paragraphLower = paragraphText.toLowerCase().trim();
 
     bool isDirectTitleMatch = false;
     String? matchedTitle;
@@ -187,8 +205,10 @@ class NodeParser {
     final isHeuristicHeading = hasNoLineBreaks && (_isLikelyHeadingText(paragraphText) || _isStandaloneShortHeading(paragraphText) || hasHeadingClass || hasHeadingStyle);
     final canRenderAsHeading = hasNoLineBreaks && (isShortText || _isLikelyHeadingText(paragraphText) || hasHeadingClass || hasHeadingStyle);
 
-    // isDirectTitleMatch'ı da koşula ekle
-    if ((isDirectTitleMatch || isChapterTitle || isSubchapterTitle || isPartialChapterTitle || isPartialSubchapterTitle || hasBoldChild || isOnlyBold || isHeuristicHeading) && canRenderAsHeading) {
+    // isDirectTitleMatch'ı da koşula ekle AMA author name ise BOLD YAPMA
+    if (!isLikelyAuthorName &&
+        (isDirectTitleMatch || isChapterTitle || isSubchapterTitle || isPartialChapterTitle || isPartialSubchapterTitle || hasBoldChild || isOnlyBold || isHeuristicHeading) &&
+        canRenderAsHeading) {
       final reasons = <String>[];
       if (isDirectTitleMatch) reasons.add('DIRECT-MATCH');
       if (isChapterTitle) reasons.add('chapter-title');

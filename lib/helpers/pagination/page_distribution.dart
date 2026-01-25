@@ -148,17 +148,21 @@ class PageDistributor {
       final span = flatSpans[i];
       final spanChars = spanCharCounts[i];
 
-      // Force new page for headings
-      if (_isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > 0) {
+      // SUBCHAPTER BAŞLIKLARI (h2/h3) için yeni sayfa başlat
+      // AMA sadece mevcut sayfa dolu ise (örn: >40% dolu)
+      if (_isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > metrics.minCharsPerPage * 0.4) {
         allPages.add(List.from(currentPageList));
         currentPageList.clear();
         currentPageChars = 0;
       }
 
       if (currentPageChars + spanChars > metrics.maxCharsPerPage) {
-        // Orphan prevention
+        // Orphan prevention - AMA başlıklar için UYGULAMA
+        // Başlık ise ve sayfa doluysa, yeni sayfaya taşıma
         int remainingAfterThis = getRemainingChars(i + 1);
-        if (remainingAfterThis > 0 && remainingAfterThis < 100) {
+
+        // Başlık değilse orphan prevention uygula
+        if (!_isHeadingSpan(span) && remainingAfterThis > 0 && remainingAfterThis < 100) {
           currentPageList.add(span);
           currentPageChars += spanChars;
           continue;
