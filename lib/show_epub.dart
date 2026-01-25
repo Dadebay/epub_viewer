@@ -119,6 +119,7 @@ class ShowEpubState extends State<ShowEpub> {
   late EpubChapterHelper _chapterHelper;
   int _currentChapterPageCount = 0;
   String? _currentSubchapterTitle;
+  bool _isSubchapterTitleLocked = false; // Lock subchapter title when navigating via TOC
   Map<int, int> _filteredToOriginalIndex = {};
   double _fontSize = 14.0;
   bool _hasAppliedAudioSync = false;
@@ -431,7 +432,11 @@ class ShowEpubState extends State<ShowEpub> {
       filteredToOriginalIndex: _filteredToOriginalIndex,
       calculateChapterAndPage: _calculateChapterAndPageFromBookPage,
       reloadChapter: (index, startPage) async => reLoadChapter(index: index, startPage: startPage),
-      setCurrentSubchapterTitle: (title) => _currentSubchapterTitle = title,
+      setCurrentSubchapterTitle: (title) {
+        _currentSubchapterTitle = title;
+        // TOC'dan subchapter seçildiğinde lock'ı aktif et
+        _isSubchapterTitleLocked = title != null;
+      },
     );
   }
 
@@ -683,6 +688,9 @@ class ShowEpubState extends State<ShowEpub> {
     var index = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     lastSwipe = 0;
     prevSwipe = 0;
+    // Unlock subchapter title when changing chapters
+    _isSubchapterTitleLocked = false;
+    _currentSubchapterTitle = null;
 
     if (index < chaptersList.length - 1) {
       _updateCacheBeforeChapterChange(index);
@@ -700,6 +708,9 @@ class ShowEpubState extends State<ShowEpub> {
     var index = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     lastSwipe = 0;
     prevSwipe = 0;
+    // Unlock subchapter title when changing chapters
+    _isSubchapterTitleLocked = false;
+    _currentSubchapterTitle = null;
 
     if (index > 0) {
       _updateCacheBeforeChapterChange(index);
@@ -730,11 +741,26 @@ class ShowEpubState extends State<ShowEpub> {
   }
 
   void _updateSubchapterTitleForPage(int currentChapterIndex, int pageInChapter) {
-    _currentSubchapterTitle = _chapterHelper.updateSubchapterTitleForPage(
+    // Detect subchapter based on current page
+    final detectedSubchapter = _chapterHelper.updateSubchapterTitleForPage(
       currentChapterIndex: currentChapterIndex,
       pageInChapter: pageInChapter,
       chaptersList: chaptersList,
     );
+
+    // If subchapter title is locked (from TOC navigation)
+    if (_isSubchapterTitleLocked && _currentSubchapterTitle != null) {
+      // Check if we're still in the same subchapter
+      if (detectedSubchapter == _currentSubchapterTitle) {
+        // Still in locked subchapter, keep lock
+        return;
+      } else {
+        // Left the locked subchapter, unlock and update
+        _isSubchapterTitleLocked = false;
+      }
+    }
+
+    _currentSubchapterTitle = detectedSubchapter;
   }
 
   List<EpubChapter> get _chapters => epubBook.Chapters ?? <EpubChapter>[];

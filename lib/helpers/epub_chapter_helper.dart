@@ -290,7 +290,6 @@ class EpubChapterHelper {
     required List<LocalChapterModel> chaptersList,
   }) {
     String? foundSubchapterTitle;
-    int closestSubchapterPage = -1;
 
     // Collect all subchapters of current chapter
     List<LocalChapterModel> currentSubchapters = [];
@@ -299,6 +298,10 @@ class EpubChapterHelper {
       if (chapter.isSubChapter && chapter.parentChapterIndex == currentChapterIndex) {
         currentSubchapters.add(chapter);
       }
+    }
+
+    if (currentSubchapters.isEmpty) {
+      return null;
     }
 
     // Sort by pageInChapter
@@ -316,17 +319,11 @@ class EpubChapterHelper {
           // If we haven't reached the next subchapter yet
           if (pageInChapter < nextSubchapter.pageInChapter) {
             foundSubchapterTitle = subchapter.chapter;
-            print('📖 GÖSTERILEN SUBCHAPTER: "${foundSubchapterTitle}"');
-            print('   Current Page In Chapter: $pageInChapter');
-            print('   Subchapter Page Range: ${subchapter.pageInChapter} - ${nextSubchapter.pageInChapter - 1}');
             break;
           }
         } else {
           // This is the last subchapter, we're in it
           foundSubchapterTitle = subchapter.chapter;
-          print('📖 GÖSTERILEN SUBCHAPTER (son): "${foundSubchapterTitle}"');
-          print('   Current Page In Chapter: $pageInChapter');
-          print('   Subchapter starts at: ${subchapter.pageInChapter}');
         }
       }
     }
