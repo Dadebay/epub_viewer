@@ -178,17 +178,27 @@ class ShowEpubState extends State<ShowEpub> {
 
     _chapterHelper.initializeEpubStructure();
 
-    // Hyphenation devre dışı - soft hyphen Android'de düzgün çalışmıyor
+    // Hyphenation aktif (soft hyphen ile satır sonu tire)
 
     getTitleFromXhtml();
 
     // TEMPORARILY clear cache to force recalculation with new pagination logic
     _cacheHelper.clearCache();
-    _loadCachedPageCounts();
-
-    reLoadChapter(init: true);
+    _initializePaginationAndLoad();
 
     super.initState();
+  }
+
+  Future<void> _initializePaginationAndLoad() async {
+    _loadCachedPageCounts();
+
+    if (!allChaptersCalculated.value) {
+      await _precalculateAllChaptersBlocking();
+    }
+
+    if (mounted) {
+      reLoadChapter(init: true);
+    }
   }
 
   loadThemeSettings() {
@@ -538,6 +548,7 @@ class ShowEpubState extends State<ShowEpub> {
     }
 
     // Update cache with REAL page count from pagination
+    // But DON'T update totalPagesInBook after initial calculation to keep it stable
     int oldPageCount = chapterPageCounts[originalChapterIdx] ?? 0;
     if (oldPageCount != totalPages) {
       int diff = totalPages - oldPageCount;
@@ -563,21 +574,24 @@ class ShowEpubState extends State<ShowEpub> {
         print(sb.toString());
       }
 
-      // During recalculation, don't set totalPagesInBook lower than preserved value
-      if (_preservedTotalPages > 0 && _cachedKnownPagesTotal < _preservedTotalPages && !allChaptersCalculated.value) {
-        // Keep preserved total during partial recalculation
-        totalPagesInBook = _preservedTotalPages;
-      } else {
-        totalPagesInBook = _cachedKnownPagesTotal;
-        // Clear preserved when we have calculated all or exceeded it
-        if (allChaptersCalculated.value) _preservedTotalPages = 0;
-      }
+      // CRITICAL: Once all chapters are calculated, keep totalPagesInBook STABLE
+      // Only update if we haven't finished initial calculation yet
+      if (!allChaptersCalculated.value) {
+        // During recalculation, don't set totalPagesInBook lower than preserved value
+        if (_preservedTotalPages > 0 && _cachedKnownPagesTotal < _preservedTotalPages) {
+          totalPagesInBook = _preservedTotalPages;
+        } else {
+          totalPagesInBook = _cachedKnownPagesTotal;
+        }
 
-      // Check if all chapters are now calculated
-      if (chapterPageCounts.length == _chapters.length) {
-        allChaptersCalculated.value = true;
-        isCalculatingTotalPages = false;
+        // Check if all chapters are now calculated
+        if (chapterPageCounts.length == _chapters.length) {
+          allChaptersCalculated.value = true;
+          isCalculatingTotalPages = false;
+          _preservedTotalPages = 0;
+        }
       }
+      // If already calculated, DON'T change totalPagesInBook - keep it stable for user
 
       _saveCachedPageCounts();
       _updateChapterPageNumbers();
@@ -810,6 +824,58 @@ class ShowEpubState extends State<ShowEpub> {
     });
   }
 
+  Future<void> _precalculateAllChaptersBlocking() async {
+    if (_isBackgroundCalcRunning) return;
+
+    // Wait for first frame to get correct MediaQuery size
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    if (_isBackgroundCalcRunning) return;
+
+    _isBackgroundCalcRunning = true;
+    isCalculatingTotalPages = true;
+    if (mounted) setState(() {});
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final pageSize = Size(screenWidth, screenHeight);
+
+    final results = await _paginationHelper.precalculateAllChapters(
+      existingPageCounts: chapterPageCounts,
+      pageSize: pageSize,
+      onChapterCalculated: (chapterIndex, pages) {
+        if (!mounted) return;
+        chapterPageCounts[chapterIndex] = pages;
+        _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
+        totalPagesInBook = _cachedKnownPagesTotal;
+        _updateChapterPageNumbers();
+        if (mounted) setState(() {});
+      },
+      shouldStop: () => !mounted,
+    );
+
+    if (!mounted) return;
+
+    for (var entry in results.entries) {
+      chapterPageCounts[entry.key] = entry.value;
+    }
+
+    _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
+    totalPagesInBook = _cachedKnownPagesTotal;
+    allChaptersCalculated.value = chapterPageCounts.length == _chapters.length;
+
+    if (allChaptersCalculated.value) {
+      controllerPaging.totalPages.value = totalPagesInBook;
+      _saveCachedPageCounts();
+    }
+
+    _updateChapterPageNumbers();
+
+    _isBackgroundCalcRunning = false;
+    isCalculatingTotalPages = false;
+    if (mounted) setState(() {});
+  }
+
   void _saveCachedPageCounts() {
     _cacheHelper.saveCachedPageCounts(
       chapterPageCounts,
@@ -965,6 +1031,10 @@ class ShowEpubState extends State<ShowEpub> {
     // Get current chapter's start page in book
     var currentChapterIdx = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     var originalChapterIdx = _filteredToOriginalIndex[currentChapterIdx] ?? currentChapterIdx;
+
+    // CRITICAL: Store the subchapter page map for this chapter
+    _subchapterPageMapByChapter[originalChapterIdx] = Map<String, int>.from(subchapterPageMap);
+    print('💾 Stored subchapter map for chapter $originalChapterIdx: $subchapterPageMap');
 
     int parentStartPageInBook = 0;
     for (int j = 0; j < originalChapterIdx; j++) {

@@ -34,7 +34,7 @@ class HyphenatorHelper {
     if (_isInitialized) return;
 
     try {
-      // SOFT HYPHEN kullan - satır sonunda tire gösterir, aksi halde görünmez
+      // Soft hyphen kullan - satır sonunda tire olarak görünür, aksi halde görünmez
 
       // Russian hyphenator
       _russianHyphenator = Hyphenator(

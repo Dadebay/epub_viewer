@@ -67,7 +67,13 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
     // Subchapter'ın parent içindeki offset'i ile hesapla
     final mapForChapter = widget.subchapterPageMapByChapter[originalParentIndex];
     final offsetInChapter = mapForChapter != null && mapForChapter.containsKey(chapter.chapter) ? mapForChapter[chapter.chapter]! : chapter.pageInChapter;
+
+    // offsetInChapter 0-indexed, parentStartPageInBook 1-indexed
+    // Sonuç: parentStartPage + offset (offset 0 ise parent'ın başlangıç sayfası)
     int startPage = parentStartPageInBook + offsetInChapter;
+
+    print('📊 Subchapter "${chapter.chapter}": parent=$originalParentIndex, parentStart=$parentStartPageInBook, offset=$offsetInChapter, result=$startPage');
+
     return startPage;
   }
 
@@ -228,11 +234,21 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                       final chapter = widget.chapters[i];
                       final currentChapterIndex = bookProgress.getBookProgress(widget.bookId).currentChapterIndex ?? 0;
 
+                      // Highlight logic:
+                      // 1. If we have a currentSubchapterTitle, highlight the subchapter that matches
+                      // 2. If no currentSubchapterTitle, highlight the main chapter we're in
                       bool isCurrentChapter = false;
-                      if (chapter.isSubChapter && chapter.parentChapterIndex >= 0) {
-                        isCurrentChapter = (currentChapterIndex == chapter.parentChapterIndex && widget.currentSubchapterTitle != null && widget.currentSubchapterTitle == chapter.chapter);
+
+                      if (widget.currentSubchapterTitle != null && widget.currentSubchapterTitle!.isNotEmpty) {
+                        // We're inside a subchapter - only highlight the matching subchapter
+                        if (chapter.isSubChapter && chapter.chapter == widget.currentSubchapterTitle) {
+                          isCurrentChapter = true;
+                        }
                       } else {
-                        isCurrentChapter = (currentChapterIndex == i && widget.currentSubchapterTitle == null);
+                        // No subchapter selected - highlight the main chapter
+                        if (!chapter.isSubChapter && currentChapterIndex == i) {
+                          isCurrentChapter = true;
+                        }
                       }
 
                       return InkWell(

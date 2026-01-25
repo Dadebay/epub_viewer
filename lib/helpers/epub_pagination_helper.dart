@@ -1,4 +1,5 @@
 import 'dart:developer';
+import 'package:cosmos_epub/helpers/hyphenator_helper.dart';
 import 'package:epubx/epubx.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -229,6 +230,12 @@ class EpubPaginationHelper {
       // Replace ALL whitespace (including newlines) with single space
       String text = node.text.replaceAll(RegExp(r'\s+'), ' ');
       if (text.trim().isEmpty) return const TextSpan(text: '');
+
+      // Apply hyphenation for accurate page count
+      final hyphenator = HyphenatorHelper.instance;
+      if (hyphenator.isInitialized && !text.contains('\u00AD') && !text.contains('\u200B')) {
+        text = hyphenator.hyphenate(text);
+      }
 
       return TextSpan(
         text: text,

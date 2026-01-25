@@ -1,4 +1,5 @@
 import 'package:cosmos_epub/helpers/pagination/html_parsing_helpers.dart';
+import 'package:cosmos_epub/helpers/hyphenator_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:html/dom.dart' as dom;
@@ -18,6 +19,7 @@ class NodeParser {
     required this.subchapterTitles,
     required this.onImageNode,
   }) {
+    HyphenatorHelper.instance.initialize();
     print('📖 NodeParser initialized:');
     print('   Chapter Title: "$chapterTitle"');
     print('   Subchapter Titles: ${subchapterTitles.map((t) => '"$t"').join(', ')}');
@@ -41,7 +43,8 @@ class NodeParser {
     text = text.replaceAll('\u202F', ' ');
 
     if (!isPoetry) {
-      text = text.replaceAll(RegExp(r'\s+'), ' ');
+      // Collapse only regular whitespace (keep ZWSP \u200B and soft hyphen \u00AD)
+      text = text.replaceAll(RegExp(r'[ \t\n\r\f\v]+'), ' ');
       text = text.replaceAllMapped(
         RegExp(r'([\.,;:!?])([A-Za-z\u0400-\u04FF])'),
         (match) => '${match.group(1)} ${match.group(2)}',
@@ -52,11 +55,21 @@ class NodeParser {
       return const TextSpan(text: '');
     }
 
-    text = text.replaceAll(RegExp(r'\s+([.,;:!?\)\]»])'), r'$1');
-    text = text.replaceAll(RegExp(r'([([«])\s+'), r'$1');
+    text = text.replaceAll(RegExp(r'[ \t\n\r\f\v]+([.,;:!?\)\]»])'), r'$1');
+    text = text.replaceAll(RegExp(r'([([«])[ \t\n\r\f\v]+'), r'$1');
 
-    // Hyphenation devre dışı - soft hyphen Android'de düzgün çalışmıyor
-    // Flutter kendi word-wrap mekanizmasını kullanacak
+    if (!isPoetry) {
+      final hyphenator = HyphenatorHelper.instance;
+      final hasSoftHyphen = text.contains('\u00AD');
+      final hasZwsp = text.contains('\u200B');
+      final alreadyHyphenated = hasSoftHyphen || hasZwsp;
+      if (hyphenator.isInitialized && !alreadyHyphenated) {
+        final before = text;
+        text = hyphenator.hyphenate(text);
+        final afterHasSoft = text.contains('\u00AD');
+        final afterHasZwsp = text.contains('\u200B');
+      }
+    }
 
     return TextSpan(
       text: text,
