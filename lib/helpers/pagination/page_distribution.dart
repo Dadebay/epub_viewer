@@ -22,8 +22,8 @@ class PageDistributor {
 
     final metrics = _calculateMetrics(flatSpans, pageSize);
 
-    // If content fits in single page - SERT ÇÖZÜM: Daha yüksek limit
-    if (metrics.pageRatio <= 1.0 && metrics.totalChars <= 1800) {
+    // If content fits in single page - BALANCED
+    if (metrics.pageRatio <= 1.0 && metrics.totalChars <= 1600) {
       // Check for subchapters even in single page
       _detectSubchaptersInSpans(flatSpans, 0);
       return [TextSpan(children: List.from(flatSpans))];
@@ -69,10 +69,10 @@ class PageDistributor {
     }
     double maxWidth = pageSize.width - horizontalPadding;
 
-    // SERT ÇÖZÜM: Minimum reserved space - maksimum doluluk
-    double containerPadding = isFrontMatter ? 8.h : 12.h;
-    double chapterHeaderSpace = isFrontMatter ? 4.h : 8.h;
-    double bottomSafeArea = isFrontMatter ? 4.h : 6.h;
+    // BALANCED: İyi doluluk + güvenli alt margin
+    double containerPadding = isFrontMatter ? 10.h : 16.h;
+    double chapterHeaderSpace = isFrontMatter ? 6.h : 12.h;
+    double bottomSafeArea = isFrontMatter ? 6.h : 10.h;
     double reservedSpace = containerPadding + chapterHeaderSpace + bottomSafeArea;
     double maxHeight = pageSize.height - reservedSpace;
 
@@ -110,14 +110,14 @@ class PageDistributor {
 
     double pageRatio = totalContentHeight / maxHeight;
 
-    // Calculate character limits - SERT ÇÖZÜM: Çok daha fazla karakter
+    // Calculate character limits - BALANCED: İyi doluluk ama güvenli
     const double baseFontSize = 13.0;
-    const int baseMinChars = 1200; // 800 -> 1200 (+50%)
-    const int baseMaxChars = 1600; // 1000 -> 1600 (+60%)
+    const int baseMinChars = 1100; // Orijinal: 800, Agresif: 1200
+    const int baseMaxChars = 1400; // Orijinal: 1000, Agresif: 1600
     const double referenceArea = 350.0 * 600.0;
 
     final double currentArea = maxWidth * maxHeight;
-    double screenCapacityFactor = (currentArea / referenceArea).clamp(0.85, 1.2);
+    double screenCapacityFactor = (currentArea / referenceArea).clamp(0.8, 1.15);
 
     final currentFontSize = contentStyle.fontSize ?? baseFontSize;
     final fontScaleFactor = baseFontSize / currentFontSize;
@@ -125,10 +125,10 @@ class PageDistributor {
     int minCharsPerPage = (baseMinChars * fontScaleFactor * screenCapacityFactor).round();
     int maxCharsPerPage = (baseMaxChars * fontScaleFactor * screenCapacityFactor).round();
 
-    // Daha yüksek limitler - sayfaları dolu tutmak için
-    if (maxCharsPerPage > 1800) maxCharsPerPage = 1800; // 1050 -> 1800
-    if (maxCharsPerPage < 800) maxCharsPerPage = 800; // 500 -> 800
-    if (minCharsPerPage > maxCharsPerPage) minCharsPerPage = maxCharsPerPage - 100;
+    // Dengeli limitler
+    if (maxCharsPerPage > 1600) maxCharsPerPage = 1600; // Orijinal: 1050, Agresif: 1800
+    if (maxCharsPerPage < 700) maxCharsPerPage = 700; // Orijinal: 500, Agresif: 800
+    if (minCharsPerPage > maxCharsPerPage) minCharsPerPage = maxCharsPerPage - 80;
 
     return _PageMetrics(
       maxWidth: maxWidth,
@@ -165,8 +165,8 @@ class PageDistributor {
       final spanChars = spanCharCounts[i];
 
       // SUBCHAPTER BAŞLIKLARI (h2/h3) için yeni sayfa başlat
-      // SERT ÇÖZÜM: Sadece sayfa %70+ dolu ise yeni sayfa aç
-      if (_isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > metrics.minCharsPerPage * 0.7) {
+      // BALANCED: Sayfa %55+ dolu ise yeni sayfa aç
+      if (_isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > metrics.minCharsPerPage * 0.55) {
         // Save current page BEFORE starting new page
         _detectSubchaptersInSpans(currentPageList, allPages.length);
         allPages.add(List.from(currentPageList));
@@ -179,8 +179,8 @@ class PageDistributor {
         // Başlık ise ve sayfa doluysa, yeni sayfaya taşıma
         int remainingAfterThis = getRemainingChars(i + 1);
 
-        // SERT ÇÖZÜM: Orphan prevention daha agresif - kısa metinleri taşıma
-        if (!_isHeadingSpan(span) && remainingAfterThis > 0 && remainingAfterThis < 200) {
+        // BALANCED: Orphan prevention - kısa metinleri taşıma
+        if (!_isHeadingSpan(span) && remainingAfterThis > 0 && remainingAfterThis < 150) {
           currentPageList.add(span);
           currentPageChars += spanChars;
           continue;
