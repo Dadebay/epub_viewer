@@ -28,6 +28,7 @@ class PagingWidget extends StatefulWidget {
     required this.onTextTap,
     required this.onPageFlip,
     required this.onLastPage,
+    this.onPaginationComplete,
     this.starterPageIndex = 0,
     required this.chapterTitle,
     required this.totalChapters,
@@ -48,6 +49,7 @@ class PagingWidget extends StatefulWidget {
   final int linesPerPage;
   final Function(int, int) onLastPage;
   final Function(int, int) onPageFlip;
+  final Function(Map<String, int>)? onPaginationComplete; // Callback for subchapter page mapping
   final VoidCallback onTextTap;
   final bool showNavBar;
   final int starterPageIndex;
@@ -72,6 +74,7 @@ class _PagingWidgetState extends State<PagingWidget> {
   final List<TextSpan> _pageSpans = [];
   bool _isFrontMatter = false;
   late TextStyle _contentStyle;
+  Map<String, int> _subchapterPageMap = {}; // Store subchapter page mapping
 
   late ImageHandler _imageHandler;
   late NodeParser _nodeParser;
@@ -241,6 +244,18 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     final distributedPages = _pageDistributor.distributeContent(spans, pageSize);
     _pageSpans.addAll(distributedPages);
+
+    // Get subchapter page mapping and send it back via callback
+    if (_pageDistributor.subchapterPageMap.isNotEmpty) {
+      print('📊 Subchapter page mapping: ${_pageDistributor.subchapterPageMap}');
+      // Store it temporarily to pass in onPageFlip callback
+      _subchapterPageMap = Map.from(_pageDistributor.subchapterPageMap);
+
+      // Call pagination complete callback to send subchapter page map
+      if (widget.onPaginationComplete != null) {
+        widget.onPaginationComplete!(_subchapterPageMap);
+      }
+    }
 
     _finalizePages();
   }

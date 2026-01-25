@@ -72,9 +72,7 @@ class NodeParser {
     final nodeText = node.text.trim();
 
     // DEBUG: Tüm kısa metinleri logla
-    if (nodeText.isNotEmpty && nodeText.length < 50 && !nodeText.contains('\n')) {
-      print('📌 ELEMENT: <${node.localName}> içerik: "$nodeText"');
-    }
+    if (nodeText.isNotEmpty && nodeText.length < 50 && !nodeText.contains('\n')) {}
 
     switch (node.localName) {
       case 'img':
@@ -122,7 +120,6 @@ class NodeParser {
             paragraphLower.contains('пять') || paragraphLower.contains('пороков') || paragraphLower.contains('команды') || paragraphLower.contains('притчи') || paragraphLower.contains('лидерстве');
         if (allCapitalized && !hasBookKeywords) {
           isLikelyAuthorName = true;
-          print('👤 AUTHOR NAME tespit edildi: "$paragraphText" - bold YAPILMAYACAK');
         }
       }
     }
@@ -161,11 +158,6 @@ class NodeParser {
         break;
       }
     }
-
-    if (isDirectTitleMatch && isShortText && hasNoLineBreaks) {
-      print('🎯 DİREKT EŞLEŞME: "$paragraphText" <-> "$matchedTitle"');
-    }
-    // ========== BASIT VE AGRESIF EŞLEŞME SONU ==========
 
     final isSubchapterTitle = isShortText && hasNoLineBreaks && (HtmlParsingHelpers.isSubchapterTitle(paragraphText, subchapterTitles) || _matchesAnyTitle(normalizedParagraph, subchapterTitles));
 
@@ -221,8 +213,6 @@ class NodeParser {
       if (hasHeadingClass) reasons.add('class');
       if (hasHeadingStyle) reasons.add('style');
 
-      print('✅ HEADING MATCH: "$paragraphText" -> ${reasons.join(', ')}');
-
       final headingStyle = contentStyle.copyWith(
         color: contentStyle.color,
         fontSize: (contentStyle.fontSize ?? 16) + 4,
@@ -236,10 +226,6 @@ class NodeParser {
         text: '\n$paragraphText\n',
         style: headingStyle,
       );
-    }
-
-    if (paragraphText.isNotEmpty && hasNoLineBreaks && paragraphText.length <= 120) {
-      print('🔎 HEADING CANDIDATE (miss): "$paragraphText"');
     }
 
     final isPoetry = HtmlParsingHelpers.isPoeticElement(node);
@@ -353,11 +339,18 @@ class NodeParser {
   Future<InlineSpan> _parseHeading(dom.Element node, double maxWidth) async {
     final headingText = node.text.trim();
 
-    print('✅ HEADING (h1/h2/h3): "$headingText" -> BOLD');
+    // Check if this heading is a subchapter title
+    bool isSubchapter = subchapterTitles.any((title) {
+      final titleLower = title.toLowerCase().trim();
+      final headingLower = headingText.toLowerCase().trim();
+      return titleLower == headingLower || titleLower.contains(headingLower) || headingLower.contains(titleLower);
+    });
 
     // DİREKT text al, children parse etme - böylece bold style korunur
+    // Subchapter ise semanticsLabel ile işaretle
     return TextSpan(
       text: '\n$headingText\n',
+      semanticsLabel: isSubchapter ? 'SUBCHAPTER:$headingText' : null,
       style: contentStyle.copyWith(
         color: contentStyle.color,
         fontSize: (contentStyle.fontSize ?? 16) + 4,
@@ -625,7 +618,6 @@ class NodeParser {
     final paragraphCombined = paragraphWords.join(' ');
 
     if (titleText.contains(paragraphCombined)) {
-      print('   ✓ Continuous sequence match: "$paragraphCombined" in "$titleText"');
       return true;
     }
 
@@ -645,7 +637,6 @@ class NodeParser {
 
     // If all paragraph words are found in title (in order), it's a match
     if (matchedWords == paragraphWords.length && paragraphWords.length >= 1) {
-      print('   ✓ Sequential word match: $matchedWords/$matchedWords words matched');
       return true;
     }
 
@@ -654,7 +645,6 @@ class NodeParser {
       final allWordsExist = paragraphWords.every((word) => titleWords.any((titleWord) => titleWord == word || titleWord.contains(word) || word.contains(titleWord)));
 
       if (allWordsExist) {
-        print('   ✓ All words exist in title: ${paragraphWords.join(" ")}');
         return true;
       }
     }

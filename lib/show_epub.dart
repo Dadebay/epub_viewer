@@ -536,6 +536,26 @@ class ShowEpubState extends State<ShowEpub> {
       int diff = totalPages - oldPageCount;
       chapterPageCounts[originalChapterIdx] = totalPages;
       _cachedKnownPagesTotal += diff;
+
+      // DEBUG: Chapter page count değişikliğini logla
+      var chapterName = epubBook.Chapters != null && originalChapterIdx < epubBook.Chapters!.length ? epubBook.Chapters![originalChapterIdx].Title ?? 'Başlıksız' : 'Bilinmiyor';
+      print('📄 Chapter $originalChapterIdx: $chapterName -> $totalPages sayfa (önceden: $oldPageCount)');
+      print('   📊 Toplam: $_cachedKnownPagesTotal sayfa (${chapterPageCounts.length}/${_chapters.length} chapter hesaplandı)');
+
+      // DEBUG: Tüm chapter page count'larını göster
+      if (chapterPageCounts.length <= 15) {
+        StringBuffer sb = StringBuffer('   📋 Chapter page counts: ');
+        for (int i = 0; i < _chapters.length; i++) {
+          var count = chapterPageCounts[i];
+          if (count != null) {
+            sb.write('[$i:$count] ');
+          } else {
+            sb.write('[$i:?] ');
+          }
+        }
+        print(sb.toString());
+      }
+
       // During recalculation, don't set totalPagesInBook lower than preserved value
       if (_preservedTotalPages > 0 && _cachedKnownPagesTotal < _preservedTotalPages && !allChaptersCalculated.value) {
         // Keep preserved total during partial recalculation
@@ -567,6 +587,13 @@ class ShowEpubState extends State<ShowEpub> {
       accumulatedBefore += chapterPageCounts[i] ?? 0;
     }
     int currentPageInBook = accumulatedBefore + currentPage + 1;
+
+    // DEBUG: Current page calculation
+    print('📍 Current Page Calculation:');
+    print('   Chapter Index: $originalChapterIdx, Page in Chapter: $currentPage');
+    print('   Accumulated Before: $accumulatedBefore');
+    print('   Current Page in Book: $currentPageInBook / $totalPagesInBook');
+
     if (_isJumpLockActive && _jumpLockedChapterIndex == currentChapterIdx && _jumpLockedOffsetInBook != null) {
       currentPageInBook = _jumpLockedOffsetInBook! + currentPage + 1;
     }
@@ -906,12 +933,63 @@ class ShowEpubState extends State<ShowEpub> {
       onTextTap: () => setState(() => showHeader = !showHeader),
       onPageFlip: _handlePageFlip,
       onLastPage: _handleLastPage,
+      onPaginationComplete: _handleSubchapterPageMapping,
       chapterTitle: _getChapterTitleForDisplay(currentChapterIndex),
       totalChapters: chaptersList.length,
       bookId: bookId,
       showNavBar: showHeader,
       subchapterTitles: subchapterTitles,
     );
+  }
+
+  /// Handle subchapter page mapping from pagination
+  void _handleSubchapterPageMapping(Map<String, int> subchapterPageMap) {
+    if (subchapterPageMap.isEmpty) return;
+
+    print('📥 Received subchapter page mapping: $subchapterPageMap');
+
+    // Get current chapter's start page in book
+    var currentChapterIdx = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
+    var originalChapterIdx = _filteredToOriginalIndex[currentChapterIdx] ?? currentChapterIdx;
+
+    int parentStartPageInBook = 0;
+    for (int j = 0; j < originalChapterIdx; j++) {
+      if (chapterPageCounts.containsKey(j)) {
+        parentStartPageInBook += chapterPageCounts[j]!;
+      }
+    }
+    parentStartPageInBook += 1; // 1-indexed
+
+    // Update subchapter page numbers in chaptersList
+    for (int i = 0; i < chaptersList.length; i++) {
+      if (!chaptersList[i].isSubChapter) continue;
+      if (chaptersList[i].parentChapterIndex != currentChapterIdx) continue;
+
+      final subchapterTitle = chaptersList[i].chapter;
+      int? pageInChapter = subchapterPageMap[subchapterTitle];
+
+      if (pageInChapter != null) {
+        // pageInChapter is 0-indexed from pagination, convert to 1-indexed book page
+        int pageInBook = parentStartPageInBook + pageInChapter;
+
+        chaptersList[i] = LocalChapterModel(
+          chapter: chaptersList[i].chapter,
+          isSubChapter: true,
+          startPage: pageInBook,
+          endPage: pageInBook,
+          pageCount: 1,
+          parentChapterIndex: chaptersList[i].parentChapterIndex,
+          pageInChapter: pageInChapter,
+        );
+
+        print('✅ Updated subchapter "${subchapterTitle}" -> page $pageInBook');
+      }
+    }
+
+    // Trigger UI update
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// Handle paging controller callback
