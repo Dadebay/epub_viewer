@@ -164,10 +164,22 @@ class PageDistributor {
       final span = flatSpans[i];
       final spanChars = spanCharCounts[i];
 
-      // SUBCHAPTER BAŞLIKLARI (h2/h3) için yeni sayfa başlat
-      // BALANCED: Sayfa %55+ dolu ise yeni sayfa aç
-      if (_isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > metrics.minCharsPerPage * 0.55) {
-        // Save current page BEFORE starting new page
+      // SUBCHAPTER kontrolü - semanticsLabel ile işaretli başlıklar
+      bool isSubchapterHeading = false;
+      if (span is TextSpan && span.semanticsLabel != null && span.semanticsLabel!.startsWith('SUBCHAPTER:')) {
+        isSubchapterHeading = true;
+      }
+
+      // SUBCHAPTER BAŞLIKLARI için ÖZEL KURAL: Her zaman yeni sayfa başlat
+      if (isSubchapterHeading && currentPageList.isNotEmpty) {
+        // Subchapter başlığı tespit edildi - mevcut sayfayı bitir, yeni sayfa aç
+        _detectSubchaptersInSpans(currentPageList, allPages.length);
+        allPages.add(List.from(currentPageList));
+        currentPageList.clear();
+        currentPageChars = 0;
+      }
+      // Normal başlıklar (h1/h2/h3) için - sadece sayfa yeterince doluysa yeni sayfa aç
+      else if (_isHeadingSpan(span) && currentPageList.isNotEmpty && currentPageChars > metrics.minCharsPerPage * 0.55) {
         _detectSubchaptersInSpans(currentPageList, allPages.length);
         allPages.add(List.from(currentPageList));
         currentPageList.clear();
