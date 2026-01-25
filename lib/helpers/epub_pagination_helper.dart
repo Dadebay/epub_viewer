@@ -27,40 +27,22 @@ class EpubPaginationHelper {
     int targetPageInBook,
     Map<int, int> chapterPageCounts,
   ) {
-    print('\n╔══════════════════════════════════════════════════════════╗');
-    print('║ 🧮 CALCULATE CHAPTER & PAGE FROM BOOK PAGE ║');
-    print('╠══════════════════════════════════════════════════════════╣');
-    print('║ Target Page In Book: $targetPageInBook');
-    print('║ Chapter Page Counts: $chapterPageCounts');
-    print('╠══════════════════════════════════════════════════════════╣');
-
     if (chapterPageCounts.isEmpty) {
-      print('║ ⚠️  chapterPageCounts is empty - returning null');
-      print('╚══════════════════════════════════════════════════════════╝');
       return null;
     }
 
     int accumulatedPages = 0;
     for (int chapterIndex = 0; chapterIndex < _chapters.length; chapterIndex++) {
       if (!chapterPageCounts.containsKey(chapterIndex)) {
-        print('║ ⚠️  Missing page count for chapter $chapterIndex - returning null');
-        print('╚══════════════════════════════════════════════════════════╝');
         return null;
       }
 
       int pagesInChapter = chapterPageCounts[chapterIndex]!;
       int nextAccumulated = accumulatedPages + pagesInChapter;
 
-      print('║ Chapter $chapterIndex: pages $accumulatedPages to ${nextAccumulated - 1} (count: $pagesInChapter)');
-
       // Check if target page is in this chapter
       if (targetPageInBook >= accumulatedPages && targetPageInBook < nextAccumulated) {
         int pageInChapter = targetPageInBook - accumulatedPages;
-
-        print('╠══════════════════════════════════════════════════════════╣');
-        print('║ ✅ FOUND TARGET IN CHAPTER $chapterIndex');
-        print('║   • Page In Chapter: $pageInChapter');
-        print('╚══════════════════════════════════════════════════════════╝');
 
         return {'chapter': chapterIndex, 'page': pageInChapter};
       }
@@ -68,8 +50,6 @@ class EpubPaginationHelper {
       accumulatedPages = nextAccumulated;
     }
 
-    print('║ ⚠️  Target page $targetPageInBook not found in any chapter');
-    print('╚══════════════════════════════════════════════════════════╝');
     return null;
   }
 
@@ -79,13 +59,6 @@ class EpubPaginationHelper {
     Map<int, int> chapterPageCounts,
     Map<int, int> filteredToOriginalIndex,
   ) {
-    print('\n╔═══════════════════════════════════════════════════════════╗');
-    print('║ 📊 UPDATE CHAPTER PAGE NUMBERS                            ║');
-    print('╠═══════════════════════════════════════════════════════════╣');
-    print('║ Total chapters: ${chaptersList.length}');
-    print('║ Chapter page counts: $chapterPageCounts');
-    print('╚═══════════════════════════════════════════════════════════╝');
-
     for (int i = 0; i < chaptersList.length; i++) {
       // Map filtered index back to original EPUB chapter index
       final originalIdx = filteredToOriginalIndex[i] ?? i;
@@ -103,12 +76,6 @@ class EpubPaginationHelper {
         final pageCount = chapterPageCounts[originalIdx] ?? 0;
         final startPage = pageCount > 0 ? accumulated + 1 : 0; // 1-indexed; 0 if unknown
 
-        print('📖 MAIN CHAPTER [$i]: "${chaptersList[i].chapter}"');
-        print('   Original idx: $originalIdx');
-        print('   Accumulated: $accumulated');
-        print('   Page count: $pageCount');
-        print('   Start page: $startPage');
-
         chaptersList[i] = LocalChapterModel(
           chapter: chaptersList[i].chapter,
           isSubChapter: isSub,
@@ -124,9 +91,6 @@ class EpubPaginationHelper {
         int startPage = 0;
         int endPage = 0;
         int calculatedPageInChapter = 0;
-
-        print('📑 SUBCHAPTER [$i]: "${chaptersList[i].chapter}"');
-        print('   Parent idx: $parentIdx');
 
         if (parentIdx >= 0 && parentIdx < chaptersList.length) {
           // Get parent's original EPUB index

@@ -1,3 +1,4 @@
+import 'package:cosmos_epub/helpers/pagination/paging_text_handler.dart';
 import 'package:cosmos_epub/widgets/loading_widget.dart';
 import 'package:epubx/epubx.dart';
 import 'package:flutter/material.dart';

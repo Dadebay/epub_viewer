@@ -17,42 +17,22 @@ class EpubTocHelper {
     required Future<void> Function(int index, int startPage) reloadChapter,
     required void Function(String?) setCurrentSubchapterTitle,
   }) async {
-    print('\n╔══════════════════════════════════════════════════════════╗');
-    print('║ 📍 HANDLE TOC SELECTION ║');
-    print('╠══════════════════════════════════════════════════════════╣');
-
     final chapterIndex = result['chapterIndex'] as int;
     final pageIndex = result['pageIndex'] as int;
     final isSubChapter = result['isSubChapter'] as bool;
     final subchapterTitle = result['subchapterTitle'] as String?;
 
-    print('║ Result from bottom sheet:');
-    print('║   • chapterIndex: $chapterIndex');
-    print('║   • pageIndex: $pageIndex');
-    print('║   • isSubChapter: $isSubChapter');
-    print('║   • subchapterTitle: $subchapterTitle');
-    print('║   • startPage from result: ${result['startPage']}');
-    print('╠══════════════════════════════════════════════════════════╣');
-
     if (isSubChapter) {
       setCurrentSubchapterTitle(subchapterTitle);
 
       final startPage = result['startPage'] as int?;
-      print('║ 🔖 SUBCHAPTER NAVIGATION:');
-      print('║   • Using startPage: $startPage');
 
       if (startPage != null && startPage > 0) {
-        print('║   • Calculating target from startPage: ${startPage - 1}');
         final targetInfo = calculateChapterAndPage(startPage - 1);
-        print('║   • targetInfo result: $targetInfo');
-        print('║   • targetInfo result: $targetInfo');
 
         if (targetInfo != null) {
           final epubChapterIndex = targetInfo['chapter']!;
           final targetPageInChapter = targetInfo['page']!;
-
-          print('║   • epubChapterIndex (from calc): $epubChapterIndex');
-          print('║   • targetPageInChapter (from calc): $targetPageInChapter');
 
           int chaptersListIndex = epubChapterIndex;
           for (var entry in filteredToOriginalIndex.entries) {
@@ -62,27 +42,14 @@ class EpubTocHelper {
             }
           }
 
-          print('║   • Final chaptersListIndex: $chaptersListIndex');
-          print('║   • Will reload chapter at page: $targetPageInChapter');
-          print('╚══════════════════════════════════════════════════════════╝');
-
           await bookProgress.setCurrentChapterIndex(bookId, chaptersListIndex);
           await bookProgress.setCurrentPageIndex(bookId, targetPageInChapter);
           await reloadChapter(chaptersListIndex, targetPageInChapter);
           return;
-        } else {
-          print('║   ⚠️  targetInfo is NULL - using fallback navigation');
-        }
-      } else {
-        print('║   ⚠️  startPage is NULL or 0 - using fallback navigation');
-      }
+        } else {}
+      } else {}
 
       // Fallback
-      print('║ 🔄 FALLBACK NAVIGATION:');
-      print('║   • chapterIndex: $chapterIndex');
-      print('║   • pageIndex: $pageIndex');
-      print('║   • originalChapterIndex: $originalChapterIndex');
-      print('╚══════════════════════════════════════════════════════════╝');
 
       if (chapterIndex == originalChapterIndex) {
         await bookProgress.setCurrentPageIndex(bookId, pageIndex);
@@ -93,11 +60,6 @@ class EpubTocHelper {
         await reloadChapter(chapterIndex, pageIndex);
       }
     } else {
-      print('║ 📖 MAIN CHAPTER NAVIGATION:');
-      print('║   • chapterIndex: $chapterIndex');
-      print('║   • pageIndex: $pageIndex');
-      print('╚══════════════════════════════════════════════════════════╝');
-
       setCurrentSubchapterTitle(null);
 
       if (chapterIndex != originalChapterIndex) {
