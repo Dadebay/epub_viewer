@@ -135,7 +135,6 @@ class ShowEpubState extends State<ShowEpub> {
   int? _jumpLockedPageInBook;
   int? _jumpLockedTotalPages;
   int? _jumpLockedChapterIndex;
-  int? _jumpLockedPageInChapter;
   int _preservedTotalPages = 0; // Preserved total during theme/font changes
   int? _targetChapterFromAudioSync;
   int? _targetPageFromAudioSync;
@@ -514,7 +513,6 @@ class ShowEpubState extends State<ShowEpub> {
     _jumpLockedPageInBook = pageInBook;
     _jumpLockedTotalPages = totalPages;
     _jumpLockedChapterIndex = chapterIndex;
-    _jumpLockedPageInChapter = pageInChapter;
     _pendingCurrentPageInBook = pageInBook;
     _pendingTotalPages = totalPages;
   }
@@ -534,7 +532,6 @@ class ShowEpubState extends State<ShowEpub> {
     _jumpLockedPageInBook = null;
     _jumpLockedTotalPages = null;
     _jumpLockedChapterIndex = null;
-    _jumpLockedPageInChapter = null;
     _pendingCurrentPageInBook = null;
     _pendingTotalPages = null;
   }
@@ -949,7 +946,9 @@ class ShowEpubState extends State<ShowEpub> {
   /// Build chapter content based on FutureBuilder snapshot
   Widget _buildChapterContent(AsyncSnapshot<void> snapshot) {
     if (_isChangingTheme) return _buildLoadingWidget();
-    if (snapshot.connectionState == ConnectionState.none || snapshot.connectionState == ConnectionState.waiting) return _buildLoadingWidget();
+    if (snapshot.connectionState == ConnectionState.none || snapshot.connectionState == ConnectionState.waiting) {
+      return _buildLoadingWidget();
+    }
     if (snapshot.hasError) return _buildErrorWidget(snapshot.error);
     if (snapshot.connectionState == ConnectionState.done) {
       if (shouldOpenDrawer) {
@@ -977,6 +976,7 @@ class ShowEpubState extends State<ShowEpub> {
   Widget _buildPagingWidget() {
     var currentChapterIndex = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     int startPageIndex = bookProgress.getBookProgress(bookId).currentPageIndex ?? 0;
+
     if (_targetChapterFromAudioSync == currentChapterIndex && _targetPageFromAudioSync != null && !_hasAppliedAudioSync) {
       startPageIndex = _targetPageFromAudioSync!;
       _hasAppliedAudioSync = true;
