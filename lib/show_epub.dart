@@ -88,6 +88,7 @@ class ShowEpubState extends State<ShowEpub> {
   String bookTitle = '';
   double brightnessLevel = 0.5;
   Map<int, int> chapterPageCounts = {};
+  final Map<int, Map<String, int>> _subchapterPageMapByChapter = {};
   String chapterTitle = '';
   List<LocalChapterModel> chaptersList = [];
   final controller = ScrollController();
@@ -176,6 +177,8 @@ class ShowEpubState extends State<ShowEpub> {
     );
 
     _chapterHelper.initializeEpubStructure();
+
+    // Hyphenation devre dışı - soft hyphen Android'de düzgün çalışmıyor
 
     getTitleFromXhtml();
 
@@ -397,6 +400,9 @@ class ShowEpubState extends State<ShowEpub> {
       bookId: bookId,
       imageUrl: widget.imageUrl,
       chapters: chaptersList,
+      chapterPageCounts: chapterPageCounts,
+      subchapterPageMapByChapter: _subchapterPageMapByChapter,
+      filteredToOriginalIndex: _filteredToOriginalIndex,
       accentColor: widget.accentColor,
       chapterListTitle: widget.chapterListTitle,
       currentPage: currentPageInBook,
@@ -522,6 +528,7 @@ class ShowEpubState extends State<ShowEpub> {
   Future<void> _handlePageFlip(int currentPage, int totalPages) async {
     var currentChapterIdx = bookProgress.getBookProgress(bookId).currentChapterIndex ?? 0;
     var originalChapterIdx = _filteredToOriginalIndex[currentChapterIdx] ?? currentChapterIdx;
+
     _currentChapterPageCount = totalPages;
 
     if (_isJumpLockActive) {
@@ -946,6 +953,13 @@ class ShowEpubState extends State<ShowEpub> {
   void _handleSubchapterPageMapping(Map<String, int> subchapterPageMap) {
     if (subchapterPageMap.isEmpty) return;
 
+    // Only update global subchapter mapping when viewing the main chapter,
+    // not when inside a subchapter (which changes the chapter title and offsets).
+    if (_currentSubchapterTitle != null && _currentSubchapterTitle!.isNotEmpty) {
+      print('⏭️ Skipping subchapter map update (inside subchapter: "$_currentSubchapterTitle")');
+      return;
+    }
+
     print('📥 Received subchapter page mapping: $subchapterPageMap');
 
     // Get current chapter's start page in book
@@ -969,7 +983,8 @@ class ShowEpubState extends State<ShowEpub> {
       int? pageInChapter = subchapterPageMap[subchapterTitle];
 
       if (pageInChapter != null) {
-        // pageInChapter is 0-indexed from pagination, convert to 1-indexed book page
+        // pageInChapter is 0-indexed from pagination
+        // parentStartPageInBook is already 1-indexed
         int pageInBook = parentStartPageInBook + pageInChapter;
 
         chaptersList[i] = LocalChapterModel(
@@ -979,10 +994,10 @@ class ShowEpubState extends State<ShowEpub> {
           endPage: pageInBook,
           pageCount: 1,
           parentChapterIndex: chaptersList[i].parentChapterIndex,
-          pageInChapter: pageInChapter,
+          pageInChapter: pageInChapter, // Keep 0-indexed for comparison
         );
 
-        print('✅ Updated subchapter "${subchapterTitle}" -> page $pageInBook');
+        print('✅ Updated subchapter "${subchapterTitle}" -> startPage: $pageInBook (parent: $parentStartPageInBook, offset: $pageInChapter)');
       }
     }
 

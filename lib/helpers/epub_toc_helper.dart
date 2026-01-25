@@ -22,42 +22,26 @@ class EpubTocHelper {
     final isSubChapter = result['isSubChapter'] as bool;
     final subchapterTitle = result['subchapterTitle'] as String?;
 
+    print('📚 TOC Selection: isSubChapter=$isSubChapter, chapterIndex=$chapterIndex, pageIndex=$pageIndex, startPage=${result['startPage']}, title=$subchapterTitle');
+
     if (isSubChapter) {
       setCurrentSubchapterTitle(subchapterTitle);
 
-      final startPage = result['startPage'] as int?;
+      // Subchapter için doğrudan pageInChapter kullan - bu zaten doğru değer
+      final pageInChapter = pageIndex; // pageIndex = chapter.pageInChapter (0-indexed)
 
-      if (startPage != null && startPage > 0) {
-        final targetInfo = calculateChapterAndPage(startPage - 1);
+      print('📚 Subchapter navigation: parentChapter=$chapterIndex, pageInChapter=$pageInChapter');
 
-        if (targetInfo != null) {
-          final epubChapterIndex = targetInfo['chapter']!;
-          final targetPageInChapter = targetInfo['page']!;
-
-          int chaptersListIndex = epubChapterIndex;
-          for (var entry in filteredToOriginalIndex.entries) {
-            if (entry.value == epubChapterIndex && !chaptersList[entry.key].isSubChapter) {
-              chaptersListIndex = entry.key;
-              break;
-            }
-          }
-
-          await bookProgress.setCurrentChapterIndex(bookId, chaptersListIndex);
-          await bookProgress.setCurrentPageIndex(bookId, targetPageInChapter);
-          await reloadChapter(chaptersListIndex, targetPageInChapter);
-          return;
-        } else {}
-      } else {}
-
-      // Fallback
-
+      // Parent chapter'a git ve doğru sayfayı aç
       if (chapterIndex == originalChapterIndex) {
-        await bookProgress.setCurrentPageIndex(bookId, pageIndex);
-        await reloadChapter(chapterIndex, pageIndex);
+        // Aynı chapter'dayız, sadece sayfayı değiştir
+        await bookProgress.setCurrentPageIndex(bookId, pageInChapter);
+        await reloadChapter(chapterIndex, pageInChapter);
       } else {
+        // Farklı chapter'a git
         await bookProgress.setCurrentChapterIndex(bookId, chapterIndex);
-        await bookProgress.setCurrentPageIndex(bookId, pageIndex);
-        await reloadChapter(chapterIndex, pageIndex);
+        await bookProgress.setCurrentPageIndex(bookId, pageInChapter);
+        await reloadChapter(chapterIndex, pageInChapter);
       }
     } else {
       setCurrentSubchapterTitle(null);
@@ -80,6 +64,9 @@ class EpubTocHelper {
     required String bookId,
     required String imageUrl,
     required List<LocalChapterModel> chapters,
+    required Map<int, int> chapterPageCounts,
+    required Map<int, Map<String, int>> subchapterPageMapByChapter,
+    required Map<int, int> filteredToOriginalIndex,
     required Color accentColor,
     required String chapterListTitle,
     required int currentPage,
@@ -99,6 +86,9 @@ class EpubTocHelper {
         bookId: bookId,
         imageUrl: imageUrl,
         chapters: chapters,
+        chapterPageCounts: chapterPageCounts,
+        subchapterPageMapByChapter: subchapterPageMapByChapter,
+        filteredToOriginalIndex: filteredToOriginalIndex,
         accentColor: accentColor,
         chapterListTitle: chapterListTitle,
         currentPage: currentPage,

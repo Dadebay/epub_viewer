@@ -290,15 +290,43 @@ class EpubChapterHelper {
     required List<LocalChapterModel> chaptersList,
   }) {
     String? foundSubchapterTitle;
+    int closestSubchapterPage = -1;
 
+    // Collect all subchapters of current chapter
+    List<LocalChapterModel> currentSubchapters = [];
     for (int i = 0; i < chaptersList.length; i++) {
       final chapter = chaptersList[i];
-
-      // Check if this is a subchapter of the current chapter
       if (chapter.isSubChapter && chapter.parentChapterIndex == currentChapterIndex) {
-        // Check if current page is at or after this subchapter's page
-        if (pageInChapter >= chapter.pageInChapter) {
-          foundSubchapterTitle = chapter.chapter;
+        currentSubchapters.add(chapter);
+      }
+    }
+
+    // Sort by pageInChapter
+    currentSubchapters.sort((a, b) => a.pageInChapter.compareTo(b.pageInChapter));
+
+    // Find the subchapter we're currently in
+    for (int i = 0; i < currentSubchapters.length; i++) {
+      final subchapter = currentSubchapters[i];
+
+      // If we're at or after this subchapter's page
+      if (pageInChapter >= subchapter.pageInChapter) {
+        // Check if there's a next subchapter
+        if (i + 1 < currentSubchapters.length) {
+          final nextSubchapter = currentSubchapters[i + 1];
+          // If we haven't reached the next subchapter yet
+          if (pageInChapter < nextSubchapter.pageInChapter) {
+            foundSubchapterTitle = subchapter.chapter;
+            print('📖 GÖSTERILEN SUBCHAPTER: "${foundSubchapterTitle}"');
+            print('   Current Page In Chapter: $pageInChapter');
+            print('   Subchapter Page Range: ${subchapter.pageInChapter} - ${nextSubchapter.pageInChapter - 1}');
+            break;
+          }
+        } else {
+          // This is the last subchapter, we're in it
+          foundSubchapterTitle = subchapter.chapter;
+          print('📖 GÖSTERILEN SUBCHAPTER (son): "${foundSubchapterTitle}"');
+          print('   Current Page In Chapter: $pageInChapter');
+          print('   Subchapter starts at: ${subchapter.pageInChapter}');
         }
       }
     }

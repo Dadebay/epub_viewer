@@ -249,6 +249,9 @@ class PageDistributor {
       }
     }
 
+    // OVERFLOW KONTROLÜ: Taşan sayfaları otomatik düzelt
+    allPages = _fixOverflowingPages(allPages, metrics);
+
     return allPages.map((pageSpans) => TextSpan(children: pageSpans)).toList();
   }
 
@@ -351,6 +354,90 @@ class PageDistributor {
           print('📍 Subchapter detected: "$subchapterTitle" at page ${pageIndex + 1}');
         }
       }
+    }
+  }
+
+  /// Taşan sayfaları tespit edip düzelt - son satırı sonraki sayfaya taşı
+  List<List<InlineSpan>> _fixOverflowingPages(List<List<InlineSpan>> pages, _PageMetrics metrics) {
+    List<List<InlineSpan>> fixedPages = [];
+
+    for (int pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+      List<InlineSpan> currentPage = List.from(pages[pageIdx]);
+
+      // Sayfanın gerçek yüksekliğini ölç
+      double actualHeight = _measurePageHeight(currentPage, metrics.maxWidth);
+
+      // Eğer sayfa maxHeight'tan %97'den fazla doluysa, taşma riski var
+      double fillRatio = actualHeight / metrics.maxHeight;
+
+      if (fillRatio > 0.97 && currentPage.isNotEmpty) {
+        // Son birkaç span'i bul ve sonraki sayfaya taşı
+        List<InlineSpan> itemsToMove = [];
+        int removeCount = 0;
+
+        // Son text span'lerden 1-3 tanesini bul (yaklaşık 1 satır)
+        for (int i = currentPage.length - 1; i >= 0 && removeCount < 3; i--) {
+          if (currentPage[i] is TextSpan) {
+            final textSpan = currentPage[i] as TextSpan;
+            if (textSpan.text != null && textSpan.text!.trim().isNotEmpty) {
+              itemsToMove.insert(0, currentPage[i]);
+              removeCount++;
+
+              // Yaklaşık 1 satır kadar metin taşındıysa dur
+              int totalChars = itemsToMove.fold(0, (sum, span) {
+                if (span is TextSpan && span.text != null) return sum + span.text!.length;
+                return sum;
+              });
+
+              if (totalChars > 80) break; // ~1 satır
+            }
+          }
+        }
+
+        // Taşınacak item'ları kaldır
+        for (var item in itemsToMove) {
+          currentPage.remove(item);
+        }
+
+        // Düzeltilmiş sayfayı ekle
+        fixedPages.add(currentPage);
+
+        // Sonraki sayfaya taşınan item'ları ekle
+        if (itemsToMove.isNotEmpty) {
+          if (pageIdx + 1 < pages.length) {
+            // Sonraki sayfa varsa, başına ekle
+            pages[pageIdx + 1].insertAll(0, itemsToMove);
+          } else {
+            // Sonraki sayfa yoksa, yeni sayfa oluştur
+            fixedPages.add(itemsToMove);
+          }
+        }
+      } else {
+        // Sayfa normal, olduğu gibi ekle
+        fixedPages.add(currentPage);
+      }
+    }
+
+    return fixedPages;
+  }
+
+  /// Bir sayfanın gerçek yüksekliğini ölç
+  double _measurePageHeight(List<InlineSpan> spans, double maxWidth) {
+    if (spans.isEmpty) return 0;
+
+    try {
+      TextPainter painter = TextPainter(
+        text: TextSpan(children: spans),
+        textDirection: TextDirection.ltr,
+        textScaleFactor: 1.0,
+      );
+      painter.layout(maxWidth: maxWidth);
+      double height = painter.height;
+      painter.dispose();
+      return height;
+    } catch (e) {
+      // Hata durumunda tahmini yükseklik döndür
+      return 0;
     }
   }
 }

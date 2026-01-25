@@ -36,7 +36,7 @@ class NodeParser {
     String text = node.text;
 
     text = text.replaceAll('\u00A0', ' ');
-    text = text.replaceAll('\u200B', '');
+    // NOT: \u200B (ZWSP) artık silmiyoruz - hyphenation bunu kullanıyor
     text = text.replaceAll('\u2009', ' ');
     text = text.replaceAll('\u202F', ' ');
 
@@ -54,6 +54,9 @@ class NodeParser {
 
     text = text.replaceAll(RegExp(r'\s+([.,;:!?\)\]»])'), r'$1');
     text = text.replaceAll(RegExp(r'([([«])\s+'), r'$1');
+
+    // Hyphenation devre dışı - soft hyphen Android'de düzgün çalışmıyor
+    // Flutter kendi word-wrap mekanizmasını kullanacak
 
     return TextSpan(
       text: text,
