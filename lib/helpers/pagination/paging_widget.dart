@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cosmos_epub/helpers/pagination/html_parsing_helpers.dart';
 import 'package:cosmos_epub/helpers/pagination/image_handler.dart';
 import 'package:cosmos_epub/helpers/pagination/node_parser.dart';
@@ -173,28 +174,28 @@ class _PagingWidgetState extends State<PagingWidget> {
   }
 
   Future<void> _paginate() async {
-    final pageSize = _initializedRenderBox.size;
-    _pageSpans.clear();
-
+    // Offload hyphenation to an isolate if there is content
     String contentToParse = widget.innerHtmlContent ?? widget.textContent;
-
     if (contentToParse.isEmpty) {
       throw Exception('No content available to display. Content is empty.');
     }
-
     contentToParse = contentToParse.trim();
 
-    _isFrontMatter = HtmlParsingHelpers.isFrontMatterContent(widget.textContent, widget.chapterTitle);
-    _contentStyle = _resolveContentStyle();
-
-    _initializeHelpers();
-
+    // Cleaning steps before isolate
     contentToParse = contentToParse.replaceAll(RegExp(r'<\?xml[^?]*\?>\s*'), '');
 
     final bodyMatch = RegExp(r'<body[^>]*>(.*?)</body>', dotAll: true).firstMatch(contentToParse);
     if (bodyMatch != null) {
       contentToParse = bodyMatch.group(1) ?? contentToParse;
     }
+
+    final pageSize = _initializedRenderBox.size;
+    _pageSpans.clear();
+
+    _isFrontMatter = HtmlParsingHelpers.isFrontMatterContent(widget.textContent, widget.chapterTitle);
+    _contentStyle = _resolveContentStyle();
+
+    _initializeHelpers();
 
     var document = html_parser.parseFragment(contentToParse);
 
@@ -209,6 +210,9 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     final chapterTitleLower = widget.chapterTitle.trim().toLowerCase();
 
+    // Frame budget for parsing loop
+    final stopwatch = Stopwatch()..start();
+
     for (var i = 0; i < nodesToParse.length; i++) {
       final node = nodesToParse[i];
 
@@ -219,18 +223,21 @@ class _PagingWidgetState extends State<PagingWidget> {
         nodeText = node.text.trim();
       }
 
-      // SADECE tam eşleşme durumunda atla, kısmi eşleşmeleri ATLAMAYALIM
-      // çünkü "Часть I" ve "Проблемы" gibi başlıklar bold olmalı
       if (chapterTitleLower.isNotEmpty && nodeText.isNotEmpty) {
         final nodeTextLower = nodeText.toLowerCase();
-        // Sadece TAM eşleşme durumunda atla
         if (nodeTextLower == chapterTitleLower) {
-          print('⏭️ ATLANDI (tam eşleşme): "$nodeText"');
+          // Skip exact chapter title match
           continue;
         }
       }
 
       spans.add(await _nodeParser.parseNode(node, maxWidth, isPoetry: false));
+
+      // Yield to UI based on time elapsed (approx 16ms frame budget)
+      if (stopwatch.elapsedMilliseconds > 12) {
+        await Future.delayed(Duration.zero);
+        stopwatch.reset();
+      }
     }
 
     bool hasContent = spans.any((span) => _spanHasRealContent(span));
@@ -247,11 +254,9 @@ class _PagingWidgetState extends State<PagingWidget> {
 
     // Get subchapter page mapping and send it back via callback
     if (_pageDistributor.subchapterPageMap.isNotEmpty) {
-      print('📊 Subchapter page mapping: ${_pageDistributor.subchapterPageMap}');
-      // Store it temporarily to pass in onPageFlip callback
+      // Logic for subchapter mapping
       _subchapterPageMap = Map.from(_pageDistributor.subchapterPageMap);
 
-      // Call pagination complete callback to send subchapter page map
       if (widget.onPaginationComplete != null) {
         widget.onPaginationComplete!(_subchapterPageMap);
       }

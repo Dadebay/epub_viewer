@@ -1,5 +1,4 @@
 import 'package:cosmos_epub/helpers/pagination/html_parsing_helpers.dart';
-import 'package:cosmos_epub/helpers/hyphenator_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:html/dom.dart' as dom;
@@ -12,15 +11,17 @@ class NodeParser {
   final List<String> subchapterTitles;
   final Future<InlineSpan> Function(dom.Element node, double maxWidth) onImageNode;
 
+  final String _normalizedChapterTitle;
+  final List<String> _normalizedSubchapterTitles;
+
   NodeParser({
     required this.contentStyle,
     required this.isFrontMatter,
     required this.chapterTitle,
     required this.subchapterTitles,
     required this.onImageNode,
-  }) {
-    HyphenatorHelper.instance.initialize();
-  }
+  })  : _normalizedChapterTitle = HtmlParsingHelpers.normalizeTitle(chapterTitle),
+        _normalizedSubchapterTitles = subchapterTitles.map(HtmlParsingHelpers.normalizeTitle).toList();
 
   Future<InlineSpan> parseNode(dom.Node node, double maxWidth, {bool isPoetry = false}) async {
     if (node is dom.Text) {
@@ -35,12 +36,11 @@ class NodeParser {
     String text = node.text;
 
     text = text.replaceAll('\u00A0', ' ');
-    // NOT: \u200B (ZWSP) artık silmiyoruz - hyphenation bunu kullanıyor
+    text = text.replaceAll('\u200B', '');
     text = text.replaceAll('\u2009', ' ');
     text = text.replaceAll('\u202F', ' ');
 
     if (!isPoetry) {
-      // Collapse only regular whitespace (keep ZWSP \u200B and soft hyphen \u00AD)
       text = text.replaceAll(RegExp(r'[ \t\n\r\f\v]+'), ' ');
       text = text.replaceAllMapped(
         RegExp(r'([\.,;:!?])([A-Za-z\u0400-\u04FF])'),
@@ -54,19 +54,6 @@ class NodeParser {
 
     text = text.replaceAll(RegExp(r'[ \t\n\r\f\v]+([.,;:!?\)\]»])'), r'$1');
     text = text.replaceAll(RegExp(r'([([«])[ \t\n\r\f\v]+'), r'$1');
-
-    if (!isPoetry) {
-      final hyphenator = HyphenatorHelper.instance;
-      final hasSoftHyphen = text.contains('\u00AD');
-      final hasZwsp = text.contains('\u200B');
-      final alreadyHyphenated = hasSoftHyphen || hasZwsp;
-      if (hyphenator.isInitialized && !alreadyHyphenated) {
-        final before = text;
-        text = hyphenator.hyphenate(text);
-        final afterHasSoft = text.contains('\u00AD');
-        final afterHasZwsp = text.contains('\u200B');
-      }
-    }
 
     return TextSpan(
       text: text,
@@ -143,7 +130,6 @@ class NodeParser {
     final allTitles = [chapterTitle, ...subchapterTitles];
 
     bool isDirectTitleMatch = false;
-    String? matchedTitle;
 
     // Paragraf herhangi bir başlığın parçası mı kontrol et
     for (final title in allTitles) {
@@ -153,29 +139,25 @@ class NodeParser {
       // Tam eşleşme
       if (paragraphLower == titleLower) {
         isDirectTitleMatch = true;
-        matchedTitle = title;
         break;
       }
 
       // Paragraf başlığın içinde mi? (örn: "Часть I" -> "Часть I Проблемы" içinde)
       if (titleLower.contains(paragraphLower) && paragraphLower.length >= 4) {
         isDirectTitleMatch = true;
-        matchedTitle = title;
         break;
       }
 
       // Başlık paragrafın içinde mi?
       if (paragraphLower.contains(titleLower) && titleLower.length >= 4) {
         isDirectTitleMatch = true;
-        matchedTitle = title;
         break;
       }
     }
 
-    final isSubchapterTitle = isShortText && hasNoLineBreaks && (HtmlParsingHelpers.isSubchapterTitle(paragraphText, subchapterTitles) || _matchesAnyTitle(normalizedParagraph, subchapterTitles));
+    final isSubchapterTitle = isShortText && hasNoLineBreaks && (_isSubchapterTitleOptimized(normalizedParagraph) || _matchesAnyNormalizedTitle(normalizedParagraph, _normalizedSubchapterTitles));
 
-    final chapterTitleText = chapterTitle.trim();
-    final normalizedChapterTitle = HtmlParsingHelpers.normalizeTitle(chapterTitleText);
+    final normalizedChapterTitle = _normalizedChapterTitle;
     final isChapterTitle = isShortText &&
         hasNoLineBreaks &&
         normalizedParagraph.isNotEmpty &&
@@ -188,11 +170,11 @@ class NodeParser {
 
     if (isShortText && hasNoLineBreaks && paragraphText.length >= 3) {
       // Check against chapter title
-      isPartialChapterTitle = _isPartOfTitle(paragraphText, chapterTitle);
+      isPartialChapterTitle = _isPartOfTitleOptimized(normalizedParagraph, normalizedChapterTitle);
 
       // Check against ALL subchapter titles
-      for (final title in subchapterTitles) {
-        if (_isPartOfTitle(paragraphText, title)) {
+      for (final title in _normalizedSubchapterTitles) {
+        if (_isPartOfTitleOptimized(normalizedParagraph, title)) {
           isPartialSubchapterTitle = true;
           break;
         }
@@ -214,17 +196,11 @@ class NodeParser {
     if (!isLikelyAuthorName &&
         (isDirectTitleMatch || isChapterTitle || isSubchapterTitle || isPartialChapterTitle || isPartialSubchapterTitle || hasBoldChild || isOnlyBold || isHeuristicHeading) &&
         canRenderAsHeading) {
-      final reasons = <String>[];
-      if (isDirectTitleMatch) reasons.add('DIRECT-MATCH');
-      if (isChapterTitle) reasons.add('chapter-title');
-      if (isSubchapterTitle) reasons.add('subchapter-title');
-      if (isPartialChapterTitle) reasons.add('partial-chapter');
-      if (isPartialSubchapterTitle) reasons.add('partial-subchapter');
-      if (hasBoldChild) reasons.add('bold-child');
-      if (isOnlyBold) reasons.add('only-bold');
-      if (isHeuristicHeading) reasons.add('heuristic');
-      if (hasHeadingClass) reasons.add('class');
-      if (hasHeadingStyle) reasons.add('style');
+      // Determine semantic label
+      String? semanticsLabel;
+      if (isSubchapterTitle || _matchesAnyNormalizedTitle(normalizedParagraph, _normalizedSubchapterTitles)) {
+        semanticsLabel = 'SUBCHAPTER:$paragraphText';
+      }
 
       final headingStyle = contentStyle.copyWith(
         color: contentStyle.color,
@@ -237,6 +213,7 @@ class NodeParser {
 
       return TextSpan(
         text: '\n$paragraphText\n',
+        semanticsLabel: semanticsLabel,
         style: headingStyle,
       );
     }
@@ -608,14 +585,10 @@ class NodeParser {
 
   /// Check if paragraph text is a significant part of a title
   /// This handles cases where titles are split across multiple HTML elements
-  bool _isPartOfTitle(String paragraphText, String fullTitle) {
-    if (paragraphText.isEmpty || fullTitle.isEmpty) return false;
-
-    final normalizedParagraph = HtmlParsingHelpers.normalizeTitle(paragraphText);
-    final normalizedTitle = HtmlParsingHelpers.normalizeTitle(fullTitle);
-
+  bool _isPartOfTitleOptimized(String normalizedParagraph, String normalizedTitle) {
     // Skip if paragraph is too short to be meaningful
     if (normalizedParagraph.length < 2) return false;
+    if (normalizedTitle.isEmpty) return false;
 
     // Check if paragraph matches the full title
     if (normalizedParagraph == normalizedTitle) return true;
@@ -665,11 +638,30 @@ class NodeParser {
     return false;
   }
 
-  bool _matchesAnyTitle(String normalizedParagraph, List<String> titles) {
-    for (final title in titles) {
-      final normalizedTitle = HtmlParsingHelpers.normalizeTitle(title);
+  bool _matchesAnyNormalizedTitle(String normalizedParagraph, List<String> normalizedTitles) {
+    for (final normalizedTitle in normalizedTitles) {
       if (_matchesSingleTitle(normalizedParagraph, normalizedTitle)) {
         return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isSubchapterTitleOptimized(String normalizedParagraph) {
+    if (normalizedParagraph.isEmpty) return false;
+
+    for (var normalizedSubTitle in _normalizedSubchapterTitles) {
+      if (normalizedSubTitle.isNotEmpty) {
+        // Exact match
+        if (normalizedParagraph == normalizedSubTitle) {
+          return true;
+        }
+        // Partial match for longer titles
+        if (normalizedParagraph.length > 5 && normalizedSubTitle.length > 5) {
+          if (normalizedParagraph.contains(normalizedSubTitle) || normalizedSubTitle.contains(normalizedParagraph)) {
+            return true;
+          }
+        }
       }
     }
     return false;

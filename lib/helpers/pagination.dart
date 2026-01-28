@@ -1,5 +1,3 @@
-// Barrel export for pagination module
-// This file re-exports all pagination components for backward compatibility
 
 export 'package:cosmos_epub/helpers/pagination/paging_widget.dart';
 export 'package:cosmos_epub/helpers/pagination/paging_text_handler.dart';

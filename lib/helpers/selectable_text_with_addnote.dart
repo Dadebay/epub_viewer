@@ -5,7 +5,6 @@ import 'package:selectable/selectable.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
-import 'dart:io';
 
 class SelectableTextWithCustomToolbar extends StatelessWidget {
   final String text;
@@ -31,36 +30,57 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iosButtonStyle = Platform.isIOS
-        ? ButtonStyle(
-            shape: WidgetStateProperty.all(
-              const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-            ),
-            padding: WidgetStateProperty.all(
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            ),
-            minimumSize: WidgetStateProperty.all(const Size(0, 44)),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          )
-        : null;
-
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Dynamic colors based on theme
+    final menuBackgroundColor = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    // Custom button style for both iOS and Android - consistent menu
+    final customButtonStyle = ButtonStyle(
+      backgroundColor: WidgetStateProperty.all(Colors.transparent),
+      foregroundColor: WidgetStateProperty.all(textColor),
+      shape: WidgetStateProperty.all(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      minimumSize: WidgetStateProperty.all(const Size(0, 44)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
 
     return Theme(
       data: theme.copyWith(
-        textButtonTheme: TextButtonThemeData(style: iosButtonStyle ?? theme.textButtonTheme.style),
-        elevatedButtonTheme: ElevatedButtonThemeData(style: iosButtonStyle ?? theme.elevatedButtonTheme.style),
-        filledButtonTheme: FilledButtonThemeData(style: iosButtonStyle ?? theme.filledButtonTheme.style),
-        // Try to override button bar spacing if possible, though Selectable internals are tricky
-        buttonTheme: theme.buttonTheme.copyWith(
-          padding: Platform.isIOS ? EdgeInsets.zero : null,
-          shape: Platform.isIOS ? const RoundedRectangleBorder(borderRadius: BorderRadius.zero) : null,
+        // Dynamic card background for popup menu
+        cardTheme: CardTheme(
+          color: menuBackgroundColor,
+          elevation: 8,
+          shadowColor: isDark ? Colors.white12 : Colors.black26,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        // Custom button styles
+        textButtonTheme: TextButtonThemeData(style: customButtonStyle),
+        elevatedButtonTheme: ElevatedButtonThemeData(style: customButtonStyle),
+        filledButtonTheme: FilledButtonThemeData(style: customButtonStyle),
+        // Override default popup menu theme
+        popupMenuTheme: PopupMenuThemeData(
+          color: menuBackgroundColor,
+          elevation: 8,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+        ),
+        // Ensure consistent text style
+        textTheme: theme.textTheme.copyWith(
+          bodyMedium: TextStyle(color: textColor, fontSize: 16),
         ),
       ),
       child: Selectable(
         selectWordOnLongPress: true,
         selectWordOnDoubleTap: true,
-        selectionColor: const Color(0xFFB8B3E9).withValues(alpha: 0.5),
+        selectionColor: isDark ? Colors.grey.shade700.withValues(alpha: 0.5) : Colors.grey.shade300.withValues(alpha: 0.5),
         popupMenuItems: [
           SelectableMenuItem(
             title: CosmosEpubLocalization.t('add_note'),

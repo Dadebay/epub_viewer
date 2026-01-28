@@ -1,5 +1,4 @@
 import 'dart:developer';
-import 'package:cosmos_epub/helpers/hyphenator_helper.dart';
 import 'package:epubx/epubx.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -213,29 +212,37 @@ class EpubPaginationHelper {
   }
 
   /// Count pages for given HTML content with specific dimensions
-  Future<int> countPages(String html, double maxWidth, double maxHeight) async {
+  Future<int> countPages(String html, double maxWidth, double maxHeight, {Stopwatch? stopwatch}) async {
     final document = parse(html);
     List<InlineSpan> spans = [];
 
+    // Use provided stopwatch or create a local one if this is a standalone call
+    final timer = stopwatch ?? (Stopwatch()..start());
+
     for (var node in document.body!.nodes) {
-      spans.add(await _parseNodeForCount(node, maxWidth, maxHeight));
+      if (timer.elapsedMilliseconds > 12) {
+        await Future.delayed(Duration.zero);
+        timer.reset();
+        timer.start();
+      }
+      spans.add(await _parseNodeForCount(node, maxWidth, maxHeight, timer));
     }
 
-    return _paginateAndCount(spans, maxWidth, maxHeight);
+    return _paginateAndCount(spans, maxWidth, maxHeight, timer);
   }
 
   /// Parse HTML node for page counting
-  Future<InlineSpan> _parseNodeForCount(dom.Node node, double maxWidth, double maxHeight) async {
+  Future<InlineSpan> _parseNodeForCount(dom.Node node, double maxWidth, double maxHeight, Stopwatch timer) async {
+    if (timer.elapsedMilliseconds > 12) {
+      await Future.delayed(Duration.zero);
+      timer.reset();
+      timer.start();
+    }
+
     if (node is dom.Text) {
       // Replace ALL whitespace (including newlines) with single space
       String text = node.text.replaceAll(RegExp(r'\s+'), ' ');
       if (text.trim().isEmpty) return const TextSpan(text: '');
-
-      // Apply hyphenation for accurate page count
-      final hyphenator = HyphenatorHelper.instance;
-      if (hyphenator.isInitialized && !text.contains('\u00AD') && !text.contains('\u200B')) {
-        text = hyphenator.hyphenate(text);
-      }
 
       return TextSpan(
         text: text,
@@ -268,7 +275,7 @@ class EpubPaginationHelper {
       if (node.localName == 'p' || node.localName == 'div') {
         List<InlineSpan> children = [];
         for (var child in node.nodes) {
-          children.add(await _parseNodeForCount(child, maxWidth, maxHeight));
+          children.add(await _parseNodeForCount(child, maxWidth, maxHeight, timer));
         }
         return TextSpan(children: children);
       }
@@ -276,7 +283,7 @@ class EpubPaginationHelper {
       if (node.localName == 'h1' || node.localName == 'h2' || node.localName == 'h3') {
         List<InlineSpan> children = [];
         for (var child in node.nodes) {
-          children.add(await _parseNodeForCount(child, maxWidth, maxHeight));
+          children.add(await _parseNodeForCount(child, maxWidth, maxHeight, timer));
         }
         return TextSpan(
           children: children,
@@ -291,7 +298,7 @@ class EpubPaginationHelper {
 
       List<InlineSpan> children = [];
       for (var child in node.nodes) {
-        children.add(await _parseNodeForCount(child, maxWidth, maxHeight));
+        children.add(await _parseNodeForCount(child, maxWidth, maxHeight, timer));
       }
       return TextSpan(children: children);
     }
@@ -300,7 +307,7 @@ class EpubPaginationHelper {
   }
 
   /// Paginate and count total pages from spans
-  int _paginateAndCount(List<InlineSpan> allSpans, double maxWidth, double maxHeight) {
+  Future<int> _paginateAndCount(List<InlineSpan> allSpans, double maxWidth, double maxHeight, Stopwatch timer) async {
     List<InlineSpan> flatSpans = [];
 
     void flatten(InlineSpan span) {
@@ -316,6 +323,11 @@ class EpubPaginationHelper {
     }
 
     for (var s in allSpans) {
+      if (timer.elapsedMilliseconds > 12) {
+        await Future.delayed(Duration.zero);
+        timer.reset();
+        timer.start();
+      }
       flatten(s);
     }
 
@@ -324,6 +336,11 @@ class EpubPaginationHelper {
     double currentHeight = 0;
 
     for (var span in flatSpans) {
+      if (timer.elapsedMilliseconds > 12) {
+        await Future.delayed(Duration.zero);
+        timer.reset();
+        timer.start();
+      }
       if (span is WidgetSpan) {
         double spanHeight = 200; // Approximate; enough for counting
         if (currentHeight + spanHeight > maxHeight && currentPageSpans.isNotEmpty) {
@@ -380,13 +397,22 @@ class EpubPaginationHelper {
     required Size pageSize,
     required Function(int chapter, int pages) onChapterCalculated,
     required bool Function() shouldStop,
+    List<int>? priorityList,
   }) async {
+    final overallStart = DateTime.now();
     final totalChapters = _chapters.length;
     final contentWidth = pageSize.width - 18.w;
     final contentHeight = pageSize.height - 100.h;
     final chapterPageCounts = Map<int, int>.from(existingPageCounts);
 
-    for (int i = 0; i < totalChapters; i++) {
+    print('⏱️ [PAGINATION] Starting precalculation for $totalChapters chapters');
+    print('📐 [PAGINATION] Page size: ${pageSize.width}x${pageSize.height}, Content: ${contentWidth}x${contentHeight}');
+
+    // Default order is 0..N-1 if no priority list provided
+    final indicesToCalculate = priorityList ?? List.generate(totalChapters, (i) => i);
+    final stopwatch = Stopwatch()..start();
+
+    for (int i in indicesToCalculate) {
       // Stop if widget is disposed
       if (shouldStop()) {
         break;
@@ -397,9 +423,14 @@ class EpubPaginationHelper {
       }
 
       try {
+        final chapterStart = DateTime.now();
         final html = buildChapterHtml(i);
-        final pages = await countPages(html, contentWidth, contentHeight);
+        final pages = await countPages(html, contentWidth, contentHeight, stopwatch: stopwatch);
         chapterPageCounts[i] = pages;
+        final chapterEnd = DateTime.now();
+        final chapterDuration = chapterEnd.difference(chapterStart).inMilliseconds;
+
+        print('⏱️ [PAGINATION] Chapter $i/${totalChapters}: ${pages} pages, took ${chapterDuration}ms');
 
         // Notify callback
         onChapterCalculated(i, pages);
@@ -407,11 +438,16 @@ class EpubPaginationHelper {
         log('⚠️ Precalc error chapter $i: $e\n$st');
       }
 
-      // Yield to UI between chapters - only every 5 chapters to speed up
-      if (i % 5 == 0 && i > 0) {
-        await Future.delayed(Duration(milliseconds: 10));
-      }
+      // Yield to UI after EVERY chapter to keep the app responsive
+      // Since some chapters take 200ms+ to calculate, we must yield frequently
+      await Future.delayed(Duration(milliseconds: 1));
     }
+
+    final overallEnd = DateTime.now();
+    final totalDuration = overallEnd.difference(overallStart).inMilliseconds;
+    final calculatedCount = chapterPageCounts.length;
+    print('⏱️ [PAGINATION] COMPLETE: Calculated $calculatedCount chapters in ${totalDuration}ms (${(totalDuration / 1000).toStringAsFixed(2)}s)');
+    print('⏱️ [PAGINATION] Average per chapter: ${calculatedCount > 0 ? (totalDuration / calculatedCount).toStringAsFixed(1) : 0}ms');
 
     return chapterPageCounts;
   }
