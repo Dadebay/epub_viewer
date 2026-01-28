@@ -59,7 +59,7 @@ class EpubContentHelper {
     TextDirection textDirection = RTLHelper.getTextDirection(textContent);
 
     final storedPageIndex = bookProgress.getBookProgress(bookId).currentPageIndex ?? 0;
-    final currentPageInBook = accumulatedPagesBeforeCurrentChapter + storedPageIndex;
+    final currentPageInBook = accumulatedPagesBeforeCurrentChapter + storedPageIndex + 1;
 
     // Calculate total pages
     int calculatedTotal = 0;
