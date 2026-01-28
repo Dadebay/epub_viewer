@@ -223,8 +223,8 @@ class ShowEpubState extends State<ShowEpub> {
       // Start background calculation WITHOUT await
       // This allows the UI to remain responsive and show the book immediately
 
-      // Give the UI a moment to render the first chapter before starting heavy calculation
-      Future.delayed(const Duration(milliseconds: 500), () {
+      // Give the UI a shorter delay to render the first chapter before starting heavy calculation
+      Future.delayed(const Duration(milliseconds: 150), () {
         if (mounted && !allChaptersCalculated.value) {
           print('⏱️ [TIMING] Starting _precalculateAllChaptersBlocking (BACKGROUND) for ${_chapters.length} chapters...');
           _precalculateAllChaptersBlocking().then((_) {
@@ -252,7 +252,7 @@ class ShowEpubState extends State<ShowEpub> {
   getTitleFromXhtml() {
     if (epubBook.Title != null) {
       bookTitle = epubBook.Title!;
-      updateUI();
+      // Don't call updateUI() here - it will be called later in loadChapter
     }
   }
 
@@ -279,10 +279,14 @@ class ShowEpubState extends State<ShowEpub> {
   }
 
   loadChapter({int index = -1, bool init = false}) async {
-    final result = EpubChapterListBuilder.buildChaptersList(chapters: _chapters, epubBook: epubBook, chapterPageCounts: chapterPageCounts);
-    chaptersList = result['chaptersList'] as List<LocalChapterModel>;
-    _filteredToOriginalIndex = result['filteredToOriginalIndex'] as Map<int, int>;
-    _updateChapterPageNumbers();
+    // Only rebuild chapters list if it's empty or if it's the initial load
+    // This avoids expensive rebuilds on every chapter navigation
+    if (chaptersList.isEmpty || init) {
+      final result = EpubChapterListBuilder.buildChaptersList(chapters: _chapters, epubBook: epubBook, chapterPageCounts: chapterPageCounts);
+      chaptersList = result['chaptersList'] as List<LocalChapterModel>;
+      _filteredToOriginalIndex = result['filteredToOriginalIndex'] as Map<int, int>;
+      _updateChapterPageNumbers();
+    }
 
     final progress = bookProgress.getBookProgress(bookId);
     final savedChapter = progress.currentChapterIndex ?? 0;
@@ -482,7 +486,8 @@ class ShowEpubState extends State<ShowEpub> {
 
   void setBrightness(double brightness) async {
     await ScreenBrightness().setScreenBrightness(brightness);
-    await Future.delayed(const Duration(seconds: 2));
+    // Reduced delay from 2s to 0.5s for faster UI response
+    await Future.delayed(const Duration(milliseconds: 500));
     showBrightnessWidget = false;
     updateUI();
   }
@@ -534,7 +539,8 @@ class ShowEpubState extends State<ShowEpub> {
       _pendingCurrentPageInBook = bookWideCurrentPage;
 
       reLoadChapter(index: currentChapterIdx, startPage: currentPageIdx).then((_) async {
-        await Future.delayed(const Duration(milliseconds: 100));
+        // Reduced delay from 100ms to 50ms for faster UI response
+        await Future.delayed(const Duration(milliseconds: 50));
         if (mounted) setState(() => _isChangingTheme = false);
       });
     }
@@ -930,8 +936,8 @@ class ShowEpubState extends State<ShowEpub> {
           _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
           totalPagesInBook = _cachedKnownPagesTotal;
 
-          // Update chapter page numbers and UI every 5 chapters to reduce overhead
-          if (chapterIndex % 5 == 0 || chapterIndex == _chapters.length - 1) {
+          // Update chapter page numbers and UI every 10 chapters to reduce overhead
+          if (chapterIndex % 10 == 0 || chapterIndex == _chapters.length - 1) {
             _updateChapterPageNumbers();
             if (mounted) setState(() {});
           }
@@ -995,8 +1001,8 @@ class ShowEpubState extends State<ShowEpub> {
         _cachedKnownPagesTotal = chapterPageCounts.values.fold(0, (sum, c) => sum + c);
         totalPagesInBook = _cachedKnownPagesTotal;
 
-        // Update UI every 5 chapters to reduce overhead
-        if (chapterIndex % 5 == 0 || chapterIndex == _chapters.length - 1) {
+        // Update UI every 10 chapters to reduce overhead
+        if (chapterIndex % 10 == 0 || chapterIndex == _chapters.length - 1) {
           _updateChapterPageNumbers();
           if (mounted) setState(() {});
         }
@@ -1036,15 +1042,16 @@ class ShowEpubState extends State<ShowEpub> {
 
   void _updateChapterPageNumbers() {
     if (!mounted) return;
+    // Only update if chaptersList is not empty (avoid unnecessary work)
+    if (chaptersList.isEmpty) return;
 
     _paginationHelper.updateChapterPageNumbers(
       chaptersList,
       chapterPageCounts,
       _filteredToOriginalIndex,
     );
-    if (mounted) {
-      setState(() {});
-    }
+    // Don't call setState here - let the caller decide if UI update is needed
+    // This avoids excessive rebuilds
   }
 
   @override

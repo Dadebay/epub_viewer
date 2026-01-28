@@ -220,7 +220,7 @@ class EpubPaginationHelper {
     final timer = stopwatch ?? (Stopwatch()..start());
 
     for (var node in document.body!.nodes) {
-      if (timer.elapsedMilliseconds > 12) {
+      if (timer.elapsedMilliseconds > 25) {
         await Future.delayed(Duration.zero);
         timer.reset();
         timer.start();
@@ -233,7 +233,7 @@ class EpubPaginationHelper {
 
   /// Parse HTML node for page counting
   Future<InlineSpan> _parseNodeForCount(dom.Node node, double maxWidth, double maxHeight, Stopwatch timer) async {
-    if (timer.elapsedMilliseconds > 12) {
+    if (timer.elapsedMilliseconds > 25) {
       await Future.delayed(Duration.zero);
       timer.reset();
       timer.start();
@@ -323,7 +323,7 @@ class EpubPaginationHelper {
     }
 
     for (var s in allSpans) {
-      if (timer.elapsedMilliseconds > 12) {
+      if (timer.elapsedMilliseconds > 25) {
         await Future.delayed(Duration.zero);
         timer.reset();
         timer.start();
@@ -336,7 +336,7 @@ class EpubPaginationHelper {
     double currentHeight = 0;
 
     for (var span in flatSpans) {
-      if (timer.elapsedMilliseconds > 12) {
+      if (timer.elapsedMilliseconds > 25) {
         await Future.delayed(Duration.zero);
         timer.reset();
         timer.start();
@@ -437,10 +437,6 @@ class EpubPaginationHelper {
       } catch (e, st) {
         log('⚠️ Precalc error chapter $i: $e\n$st');
       }
-
-      // Yield to UI after EVERY chapter to keep the app responsive
-      // Since some chapters take 200ms+ to calculate, we must yield frequently
-      await Future.delayed(Duration(milliseconds: 1));
     }
 
     final overallEnd = DateTime.now();
