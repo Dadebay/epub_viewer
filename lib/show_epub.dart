@@ -732,8 +732,7 @@ class ShowEpubState extends State<ShowEpub> {
       prevSwipe = 0;
       // Need 2 swipes to change chapter
       if (lastSwipe > 1) {
-        // Wait for page flip animation to complete
-        await Future.delayed(const Duration(milliseconds: 450));
+        // Don't wait - let the animation complete naturally with content already loaded
         nextChapter();
       }
     }
