@@ -4,9 +4,7 @@ import '../helpers/chapters_bottom_sheet.dart';
 import '../models/chapter_model.dart';
 import '../show_epub.dart';
 
-/// Helper class for Table of Contents navigation
 class EpubTocHelper {
-  /// Navigate to selected chapter or subchapter from TOC result
   static Future<void> handleTocSelection({
     required Map<String, dynamic> result,
     required String bookId,
@@ -22,23 +20,15 @@ class EpubTocHelper {
     final isSubChapter = result['isSubChapter'] as bool;
     final subchapterTitle = result['subchapterTitle'] as String?;
 
-    print('📚 TOC Selection: isSubChapter=$isSubChapter, chapterIndex=$chapterIndex, pageIndex=$pageIndex, startPage=${result['startPage']}, title=$subchapterTitle');
-
     if (isSubChapter) {
       setCurrentSubchapterTitle(subchapterTitle);
 
-      // Subchapter için doğrudan pageInChapter kullan - bu zaten doğru değer
-      final pageInChapter = pageIndex; // pageIndex = chapter.pageInChapter (0-indexed)
+      final pageInChapter = pageIndex;
 
-      print('📚 Subchapter navigation: parentChapter=$chapterIndex, pageInChapter=$pageInChapter');
-
-      // Parent chapter'a git ve doğru sayfayı aç
       if (chapterIndex == originalChapterIndex) {
-        // Aynı chapter'dayız, sadece sayfayı değiştir
         await bookProgress.setCurrentPageIndex(bookId, pageInChapter);
         await reloadChapter(chapterIndex, pageInChapter);
       } else {
-        // Farklı chapter'a git
         await bookProgress.setCurrentChapterIndex(bookId, chapterIndex);
         await bookProgress.setCurrentPageIndex(bookId, pageInChapter);
         await reloadChapter(chapterIndex, pageInChapter);
@@ -57,7 +47,6 @@ class EpubTocHelper {
     }
   }
 
-  /// Show TOC bottom sheet
   static Future<Map<String, dynamic>?> showTocBottomSheet({
     required BuildContext context,
     required String bookTitle,

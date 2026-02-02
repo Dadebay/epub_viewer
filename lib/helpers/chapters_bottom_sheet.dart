@@ -30,15 +30,15 @@ class ChaptersBottomSheet extends StatefulWidget {
   final Color accentColor;
   final String bookId;
   final String chapterListTitle;
-  final List<LocalChapterModel> chapters;
   final Map<int, int> chapterPageCounts;
-  final Map<int, Map<String, int>> subchapterPageMapByChapter;
-  final Map<int, int> filteredToOriginalIndex;
+  final List<LocalChapterModel> chapters;
   final int currentPage;
   final int currentPageInChapter;
   final String? currentSubchapterTitle;
+  final Map<int, int> filteredToOriginalIndex;
   final String imageUrl;
   final bool isCalculating;
+  final Map<int, Map<String, int>> subchapterPageMapByChapter;
   final String title;
   final int totalPages;
 
@@ -47,32 +47,25 @@ class ChaptersBottomSheet extends StatefulWidget {
 }
 
 class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
-  /// Subchapter için doğru startPage'i dinamik hesapla
   int _calculateSubchapterStartPage(LocalChapterModel chapter) {
     if (!chapter.isSubChapter) {
-      return chapter.startPage; // Normal chapter, direkt döndür
+      return chapter.startPage;
     }
 
-    // Parent chapter'ın başlangıç sayfasını hesapla
     final parentChapterIndex = chapter.parentChapterIndex;
     final originalParentIndex = widget.filteredToOriginalIndex[parentChapterIndex] ?? parentChapterIndex;
 
-    int parentStartPageInBook = 1; // 1-indexed
+    int parentStartPageInBook = 1;
     for (int j = 0; j < originalParentIndex; j++) {
       if (widget.chapterPageCounts.containsKey(j)) {
         parentStartPageInBook += widget.chapterPageCounts[j]!;
       }
     }
 
-    // Subchapter'ın parent içindeki offset'i ile hesapla
     final mapForChapter = widget.subchapterPageMapByChapter[originalParentIndex];
     final offsetInChapter = mapForChapter != null && mapForChapter.containsKey(chapter.chapter) ? mapForChapter[chapter.chapter]! : chapter.pageInChapter;
 
-    // offsetInChapter 0-indexed, parentStartPageInBook 1-indexed
-    // Sonuç: parentStartPage + offset (offset 0 ise parent'ın başlangıç sayfası)
     int startPage = parentStartPageInBook + offsetInChapter;
-
-    print('📊 Subchapter "${chapter.chapter}": parent=$originalParentIndex, parentStart=$parentStartPageInBook, offset=$offsetInChapter, result=$startPage');
 
     return startPage;
   }
@@ -234,28 +227,15 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                       final chapter = widget.chapters[i];
                       final currentChapterIndex = bookProgress.getBookProgress(widget.bookId).currentChapterIndex ?? 0;
 
-                      // Debug: Print current state
-                      if (i == 0) {
-                        print('🔍 BOTTOM SHEET DEBUG:');
-                        print('   currentSubchapterTitle: "${widget.currentSubchapterTitle}"');
-                        print('   currentChapterIndex: $currentChapterIndex');
-                        print('   currentPageInChapter: ${widget.currentPageInChapter}');
-                      }
-
-                      // Highlight logic - simplified to use chapter index instead of title matching
                       bool isCurrentChapter = false;
 
                       if (widget.currentSubchapterTitle != null && widget.currentSubchapterTitle!.isNotEmpty) {
-                        // We're inside a subchapter - highlight based on title match
                         if (chapter.isSubChapter && chapter.chapter == widget.currentSubchapterTitle) {
                           isCurrentChapter = true;
-                          print('✅ ACTIVE SUBCHAPTER: "${chapter.chapter}" (index: $i, title match)');
                         }
                       } else {
-                        // No subchapter - highlight the main chapter by index
                         if (!chapter.isSubChapter && currentChapterIndex == i) {
                           isCurrentChapter = true;
-                          print('✅ ACTIVE CHAPTER: "${chapter.chapter}" (index: $i)');
                         }
                       }
 
@@ -264,11 +244,6 @@ class _ChaptersBottomSheetState extends State<ChaptersBottomSheet> {
                           if (chapter.isSubChapter && chapter.parentChapterIndex >= 0) {
                             final dynamicPageInChapter = _calculateSubchapterPageInChapter(chapter);
                             final dynamicStartPage = _calculateSubchapterStartPage(chapter);
-
-                            print('🎯 TIKLANAN SUBCHAPTER: "${chapter.chapter}"');
-                            print('   Parent Chapter Index: ${chapter.parentChapterIndex}');
-                            print('   Page In Chapter: $dynamicPageInChapter');
-                            print('   Start Page: $dynamicStartPage');
 
                             Navigator.of(context).pop({
                               'isSubChapter': true,

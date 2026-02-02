@@ -300,8 +300,100 @@ class _PagingWidgetState extends State<PagingWidget> {
       if (pages.isNotEmpty) {
         final startIndex = widget.starterPageIndex < pages.length ? widget.starterPageIndex : 0;
         widget.onPageFlip(startIndex, pages.length);
+        _printPageDensityAnalysis(startIndex);
       }
     });
+  }
+
+  // Sayfanın metin doluluk oranını hesapla (göreli - en dolu sayfaya göre)
+  double _calculatePageDensity(int pageIndex, int maxCharsInChapter) {
+    if (pageIndex < 0 || pageIndex >= _pageSpans.length) return 0.0;
+    if (maxCharsInChapter == 0) return 0.0;
+
+    final span = _pageSpans[pageIndex];
+    int charCount = _countCharactersInSpan(span);
+
+    // En dolu sayfayı %100 kabul et, diğerlerini ona göre oranla
+    double density = (charCount / maxCharsInChapter).clamp(0.0, 1.0);
+    // Görselde %97 sınırı uygula (taşma algısını azaltır)
+    density = (density * 0.97).clamp(0.0, 0.97);
+    return density;
+  }
+
+  // Bölümdeki en fazla karakter sayısını bul
+  int _getMaxCharCountInChapter() {
+    if (_pageSpans.isEmpty) return 0;
+
+    int maxChars = 0;
+    for (var span in _pageSpans) {
+      int charCount = _countCharactersInSpan(span);
+      if (charCount > maxChars) {
+        maxChars = charCount;
+      }
+    }
+    return maxChars;
+  }
+
+  // TextSpan içindeki toplam karakter sayısını hesapla
+  int _countCharactersInSpan(InlineSpan span) {
+    int count = 0;
+
+    if (span is TextSpan) {
+      count += (span.text?.length ?? 0);
+      if (span.children != null) {
+        for (var child in span.children!) {
+          count += _countCharactersInSpan(child);
+        }
+      }
+    } else if (span is WidgetSpan) {
+      // Widget'lar için sabit bir değer ekle (resimler vb.)
+      count += 50;
+    }
+
+    return count;
+  }
+
+  // Aktif sayfa ve çevresindeki ±5 sayfanın doluluk oranını print et
+  void _printPageDensityAnalysis(int currentPage) {
+    if (_pageSpans.isEmpty) return;
+
+    // Bölümdeki maksimum karakter sayısını bul
+    int maxChars = _getMaxCharCountInChapter();
+
+    print('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📊 SAYFA DOLULUK ANALİZİ');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('📖 Bölüm: ${widget.chapterTitle}');
+    print('📄 Toplam Sayfa: ${_pageSpans.length}');
+    print('👉 Aktif Sayfa: ${currentPage + 1}/${_pageSpans.length}');
+    print('📊 En Dolu Sayfa: $maxChars karakter (referans %97)');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    // -5'ten +5'e kadar (toplam 11 sayfa)
+    for (int offset = -5; offset <= 5; offset++) {
+      int pageIndex = currentPage + offset;
+
+      if (pageIndex < 0 || pageIndex >= _pageSpans.length) {
+        continue; // Geçersiz sayfa indeksleri için atla
+      }
+
+      int charCount = _countCharactersInSpan(_pageSpans[pageIndex]);
+      double density = _calculatePageDensity(pageIndex, maxChars);
+      String indicator = offset == 0 ? '👉' : '  ';
+      String bar = _createDensityBar(density);
+
+      print('$indicator Sayfa ${pageIndex + 1}: $bar ${(density * 100).toStringAsFixed(1)}% ($charCount karakter)');
+    }
+
+    print('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  }
+
+  // Doluluk oranı için görsel bar oluştur
+  String _createDensityBar(double density) {
+    int filledBlocks = (density * 20).round();
+    String filled = '█' * filledBlocks;
+    String empty = '░' * (20 - filledBlocks);
+    return '[$filled$empty]';
   }
 
   @override
@@ -416,6 +508,7 @@ class _PagingWidgetState extends State<PagingWidget> {
                     _currentPageIndex = pageIndex;
                     _handler.currentPage.value = pageIndex + 1;
                     widget.onPageFlip(pageIndex, pages.length);
+                    _printPageDensityAnalysis(pageIndex);
                   },
                   onLastPageSwipe: () {
                     widget.onLastPage(_currentPageIndex, pages.length);

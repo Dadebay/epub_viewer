@@ -22,31 +22,31 @@ class ProgressBarWidget extends StatefulWidget {
   }) : super(key: key);
 
   final Function(int targetPage)? onJumpToPage;
+  final Function(bool isLongPressing)? onLongPressStateChanged;
   final Color? backgroundColor;
-  final String? chapterTitle;
-  final int currentPage;
-  final int staticThemeId;
   final Color buttonBackgroundColor;
   final Color buttonIconColor;
+  final String? chapterTitle;
+  final int currentPage;
   final bool isCalculating;
   final VoidCallback? onNextPage;
   final VoidCallback? onPreviousPage;
+  final int staticThemeId;
   final Color? textColor;
   final int totalPages;
-  final Function(bool isLongPressing)? onLongPressStateChanged;
 
   @override
   State<ProgressBarWidget> createState() => _ProgressBarWidgetState();
 }
 
 class _ProgressBarWidgetState extends State<ProgressBarWidget> {
+  double _dragStartX = 0;
+  bool _hasDraggedSignificantly = false;
   bool _isDragging = false;
   int _lastHapticPage = -1;
   OverlayEntry? _overlayEntry;
-  int _targetPage = 0;
   double _progressBarWidth = 0;
-  double _dragStartX = 0;
-  bool _hasDraggedSignificantly = false;
+  int _targetPage = 0;
 
   @override
   void dispose() {
@@ -158,8 +158,6 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Debug prints for page calculation
-
     return GestureDetector(
         onHorizontalDragStart: (details) {
           final RenderBox box = context.findRenderObject() as RenderBox;
@@ -183,7 +181,6 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
             final progressBarPadding = 16.w;
             final localX = localPosition.dx - progressBarPadding;
 
-            // Check if dragged significantly (more than 10 pixels)
             if (!_hasDraggedSignificantly && (localPosition.dx - _dragStartX).abs() > 10) {
               _hasDraggedSignificantly = true;
             }
@@ -204,12 +201,10 @@ class _ProgressBarWidgetState extends State<ProgressBarWidget> {
         onHorizontalDragEnd: (details) {
           _removeOverlay();
 
-          // Only process as drag if moved significantly
           if (_hasDraggedSignificantly && _targetPage != widget.currentPage && widget.onJumpToPage != null) {
             HapticFeedback.mediumImpact();
             widget.onJumpToPage!(_targetPage);
           } else if (!_hasDraggedSignificantly && _targetPage != widget.currentPage && widget.onJumpToPage != null) {
-            // Treat as tap if didn't drag significantly
             HapticFeedback.mediumImpact();
             widget.onJumpToPage!(_targetPage);
           } else {
