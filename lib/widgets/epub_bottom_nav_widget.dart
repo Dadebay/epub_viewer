@@ -95,6 +95,8 @@ class _EpubBottomNavWidgetState extends State<EpubBottomNavWidget> {
 
   @override
   Widget build(BuildContext context) {
+    print('📖 EPUB Page Info - Current Page: ${widget.currentPage}, Total Pages: ${widget.totalPages}');
+
     return Positioned(
       left: 0,
       right: 0,
@@ -146,12 +148,10 @@ class _EpubBottomNavWidgetState extends State<EpubBottomNavWidget> {
                                   setState(() {
                                     _isProgressLongPressed = isLongPressing;
                                   });
-                                  widget.onProgressLongPressChanged
-                                      ?.call(isLongPressing);
+                                  widget.onProgressLongPressChanged?.call(isLongPressing);
                                 },
                                 staticThemeId: widget.staticThemeId,
-                                buttonBackgroundColor:
-                                    widget.buttonBackgroundColor,
+                                buttonBackgroundColor: widget.buttonBackgroundColor,
                                 buttonIconColor: widget.buttonIconColor,
                               ),
                             )

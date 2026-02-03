@@ -206,6 +206,9 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
     return AutoHyphenatingText(
       formattedText,
       textAlign: TextAlign.justify,
+      locale: const Locale('en', 'US'), // İngilizce heceleme
+      hyphenationCharacter: '\u00AD', // Soft hyphen
+      hyphenate: true, // Hecelemeyi aktif et
       style: style.copyWith(
         fontFamily: 'SFPro',
         height: 1.5,
@@ -817,10 +820,31 @@ class BookPageBuilder {
 
                                     return Container(
                                       constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                                      child: RichText(
-                                        textAlign: TextAlign.left,
-                                        text: sanitizedSpan,
-                                      ),
+                                      child: () {
+                                        final simpleText = _extractSimpleTextIfPossible(sanitizedSpan, style);
+                                        if (simpleText != null) {
+                                          print('🔍 AutoHyphenatingText: Basit metin kullanılıyor - ${simpleText.substring(0, simpleText.length > 50 ? 50 : simpleText.length)}...');
+                                          return AutoHyphenatingText(
+                                            simpleText,
+                                            textAlign: TextAlign.justify,
+                                            locale: const Locale('en', 'US'), // İngilizce heceleme
+                                            hyphenationCharacter: '\u00AD', // Soft hyphen
+                                            hyphenate: true, // Hecelemeyi aktif et
+                                            style: style.copyWith(
+                                              fontFamily: 'SFPro',
+                                              height: 1.5,
+                                              letterSpacing: 0,
+                                              wordSpacing: 0,
+                                            ),
+                                          );
+                                        }
+
+                                        print('⚠️ RichText kullanılıyor: Karmaşık metin yapısı');
+                                        return RichText(
+                                          textAlign: TextAlign.left,
+                                          text: sanitizedSpan,
+                                        );
+                                      }(),
                                     );
                                   },
                                 ),
@@ -914,6 +938,52 @@ class BookPageBuilder {
     }
 
     return TextSpan(children: sanitizedChildren, style: span.style);
+  }
+
+  static String? _extractSimpleTextIfPossible(TextSpan span, TextStyle baseStyle) {
+    final buffer = StringBuffer();
+    bool isSimple = true;
+
+    void visit(InlineSpan child) {
+      if (!isSimple) return;
+
+      if (child is WidgetSpan) {
+        isSimple = false;
+        return;
+      }
+
+      if (child is TextSpan) {
+        if (child.children != null && child.children!.isNotEmpty) {
+          for (final nested in child.children!) {
+            visit(nested);
+            if (!isSimple) return;
+          }
+          return;
+        }
+
+        final childStyle = child.style;
+        if (childStyle != null && childStyle != baseStyle) {
+          isSimple = false;
+          return;
+        }
+
+        buffer.write(child.text ?? '');
+      }
+    }
+
+    if (span.children != null) {
+      for (final child in span.children!) {
+        visit(child);
+        if (!isSimple) return null;
+      }
+    } else {
+      visit(span);
+    }
+
+    if (!isSimple) return null;
+
+    final text = buffer.toString();
+    return text.trim().isEmpty ? null : text;
   }
 
   static bool _isQuoteOnlyPage(TextSpan contentSpan) {

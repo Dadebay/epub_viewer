@@ -463,29 +463,19 @@ class PageDistributor {
       List<InlineSpan> currentPage = List.from(pages[i]);
 
       // Sayfa doluluk oranını hesapla (yükseklik bazlı)
-      int currentChars = _countCharsInSpans(currentPage);
       double currentHeight = _measurePageHeight(currentPage, metrics.maxWidth);
       double currentFill = metrics.maxHeight == 0 ? 0.0 : (currentHeight / metrics.maxHeight);
 
       // Sonraki sayfayı kontrol et
       if (i + 1 < pages.length) {
         List<InlineSpan> nextPage = pages[i + 1];
-        int nextChars = _countCharsInSpans(nextPage);
         double nextHeight = _measurePageHeight(nextPage, metrics.maxWidth);
         double nextFill = metrics.maxHeight == 0 ? 0.0 : (nextHeight / metrics.maxHeight);
-        int combinedChars = currentChars + nextChars;
         final combinedPage = <InlineSpan>[...currentPage, ...nextPage];
         double combinedHeight = _measurePageHeight(combinedPage, metrics.maxWidth);
         double combinedFill = metrics.maxHeight == 0 ? 0.0 : (combinedHeight / metrics.maxHeight);
 
         bool startsWithHeading = _startsWithHeading(nextPage);
-
-        // Debug print
-        print('\n📖 Sayfa ${i + 1} -> ${i + 2}:');
-        print('   Sayfa ${i + 1}: ${(currentFill * 100).toStringAsFixed(1)}% ($currentChars kar)');
-        print('   Sayfa ${i + 2}: ${(nextFill * 100).toStringAsFixed(1)}% ($nextChars kar)');
-        print('   Birleşik: ${(combinedFill * 100).toStringAsFixed(1)}% ($combinedChars kar)');
-        print('   Başlıkla başlıyor: $startsWithHeading');
 
         // BİRLEŞTİRME KURALLARI:
         // Öncelikli: İki sayfa da %60'ın altındaysa direkt birleştir
@@ -497,16 +487,9 @@ class PageDistributor {
         bool rule3 = combinedFill < 0.97;
         bool rule4 = !startsWithHeading;
 
-        print('   ✓ Kural 1 (<75%): ${rule1 ? "✅" : "❌"}');
-        print('   ✓ Kural 2 (<75%): ${rule2 ? "✅" : "❌"}');
-        print('   ✓ Kural 3 (<97%): ${rule3 ? "✅" : "❌"}');
-        print('   ✓ Kural 4 (başlık yok): ${rule4 ? "✅" : "❌"}');
-
         bool canMerge = (isPriorityMerge || (rule1 && rule2 && rule3 && rule4));
 
         if (canMerge) {
-          // Sayfaları birleştir
-          print('   ✅ BİRLEŞTİRİLDİ! 🎉');
           currentPage.addAll(nextPage);
           mergedPages.add(currentPage);
           mergeCount++;
@@ -519,8 +502,6 @@ class PageDistributor {
         bool canRebalance = !startsWithHeading && combinedFill > 0.97;
 
         if (canRebalance) {
-          print('   🔄 YENİDEN DENGELEME YAPILIYOR...');
-
           // Tüm içeriği birleştir
           List<InlineSpan> allContent = List.from(currentPage);
           allContent.addAll(nextPage);
@@ -532,12 +513,7 @@ class PageDistributor {
           var rebalancedPages = _splitPageAtCharCount(allContent, targetCharsForFirstPage);
 
           if (rebalancedPages != null) {
-            int newFirstChars = _countCharsInSpans(rebalancedPages['first']!);
             int newSecondChars = _countCharsInSpans(rebalancedPages['second']!);
-
-            print('   ✅ DENGELEME BAŞARILI!');
-            print('      Yeni Sayfa ${i + 1}: ${((newFirstChars / metrics.maxCharsPerPage) * 100).toStringAsFixed(1)}% ($newFirstChars kar)');
-            print('      Yeni Sayfa ${i + 2}: ${((newSecondChars / metrics.maxCharsPerPage) * 100).toStringAsFixed(1)}% ($newSecondChars kar)');
 
             mergedPages.add(rebalancedPages['first']!);
 
@@ -562,8 +538,6 @@ class PageDistributor {
             continue;
           }
         }
-
-        print('   ❌ Birleştirilmedi');
       }
 
       // Birleştirilmediyse normal ekle
@@ -571,13 +545,6 @@ class PageDistributor {
       i++;
     }
 
-    print('\n🎯 SONUÇ:');
-    print('   Önceki Sayfa Sayısı: ${pages.length}');
-    print('   Yeni Sayfa Sayısı: ${mergedPages.length}');
-    print('   Birleştirilen Çift: $mergeCount');
-
-    // POST-PROCESSING: %97'den fazla dolu sayfaları düzelt
-    print('\n🔧 POST-PROCESSING: Taşma kontrolü...');
     mergedPages = _fixOverfilledPages(mergedPages, metrics);
     // POST-PROCESSING: yükseklik taşmasını tekrar kontrol et
     mergedPages = _fixOverflowingPages(mergedPages, metrics);
@@ -589,8 +556,6 @@ class PageDistributor {
     mergedPages = _trimPageBoundaryNewlines(mergedPages, 'merge-post');
     // POST-PROCESSING: sayfa içi span sınırlarında \n çakışmasını temizle
     mergedPages = _trimAdjacentSpanNewlines(mergedPages, 'merge-post');
-
-    print('========== BİRLEŞTİRME BİTTİ ==========\n');
 
     return mergedPages;
   }
@@ -740,7 +705,6 @@ class PageDistributor {
             final cleanedNext = nextText.replaceFirst(RegExp(r'^\n+\s*'), '');
             if (cleanedNext.isEmpty) {
               spans.removeAt(i + 1);
-              print('   🧹 Span sınırı \n kaldırıldı | stage: $stage | sayfa: ${pageIndex + 1} | span: ${i + 1}');
               continue;
             }
             if (cleanedNext != nextText) {
@@ -749,7 +713,6 @@ class PageDistributor {
                 style: next.style,
                 semanticsLabel: next.semanticsLabel,
               );
-              print('   🧹 Span sınırı \n temizlendi | stage: $stage | sayfa: ${pageIndex + 1} | span: ${i + 1}');
             }
           }
         }
@@ -778,18 +741,6 @@ class PageDistributor {
 
       final lastText = lastSpan.text ?? '';
       final firstText = firstSpan.text ?? '';
-
-      const targetSnippet = 'Но это было почти два года назад';
-      final lastPreview = lastText.replaceAll('\n', '\\n');
-      final firstPreview = firstText.replaceAll('\n', '\\n');
-      final boundaryHasDoubleNl = lastText.endsWith('\n') && firstText.startsWith('\n');
-      final boundaryHasTarget = lastText.contains(targetSnippet) || firstText.contains(targetSnippet);
-
-      if (boundaryHasDoubleNl || boundaryHasTarget) {
-        print('   🧭 BOUNDARY DEBUG | stage: $stage | sayfa: ${pageIndex + 1} -> ${pageIndex + 2}');
-        print('      🔚 last:  ${lastPreview.length > 200 ? lastPreview.substring(lastPreview.length - 200) : lastPreview}');
-        print('      🔜 first: ${firstPreview.length > 200 ? firstPreview.substring(0, 200) : firstPreview}');
-      }
 
       // 1) Eğer iki sayfa sınırında \n çakışıyorsa, sonraki sayfanın başındaki \n'i kaldır
       if (lastText.endsWith('\n') && firstText.startsWith('\n')) {
