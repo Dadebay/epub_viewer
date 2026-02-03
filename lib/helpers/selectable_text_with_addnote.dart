@@ -5,6 +5,7 @@ import 'package:selectable/selectable.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:auto_hyphenating_text/auto_hyphenating_text.dart';
 
 class SelectableTextWithCustomToolbar extends StatelessWidget {
   const SelectableTextWithCustomToolbar({
@@ -67,73 +68,149 @@ class SelectableTextWithCustomToolbar extends StatelessWidget {
   }
 
   String _addSoftHyphens(String text) {
-    return text.replaceAllMapped(RegExp(r'\b[\w\u0400-\u04FF]{8,}\b'), (match) {
+    int hyphenatedCount = 0;
+
+    // AGRESİF HECELEME: 6+ harfli kelimeleri böl (eski: 8+)
+    final result = text.replaceAllMapped(RegExp(r'\b[\w\u0400-\u04FF]{6,}\b'), (match) {
       String word = match.group(0)!;
 
+      // Zaten tire varsa atla
       if (word.contains('-') || word.contains('\u00AD')) return word;
 
       bool isRussian = RegExp(r'[\u0400-\u04FF]').hasMatch(word);
 
-      StringBuffer result = StringBuffer();
-      for (int i = 0; i < word.length; i++) {
-        result.write(word[i]);
+      String hyphenated;
+      if (isRussian) {
+        hyphenated = _hyphenateRussian(word);
+      } else {
+        hyphenated = _hyphenateEnglish(word);
+      }
 
-        if (isRussian && i > 2 && i < word.length - 2) {
-          String current = word[i];
-          String next = i < word.length - 1 ? word[i + 1] : '';
+      // Eğer soft hyphen eklendiyse sayacı artır
+      if (hyphenated.contains('\u00AD')) {
+        hyphenatedCount++;
+      }
 
-          bool currentIsConsonant = RegExp(r'[бвгджзклмнпрстфхцчшщБВГДЖЗКЛМНПРСТФХЦЧШЩ]').hasMatch(current);
-          bool nextIsVowel = RegExp(r'[аэоуиыяюеёАЭОУИЫЯЮЕЁ]').hasMatch(next);
+      return hyphenated;
+    });
 
-          if (currentIsConsonant && nextIsVowel && (i % 3 == 0 || i % 4 == 0)) {
-            result.write('\u00AD');
-          }
-        } else if (!isRussian && i > 3 && i < word.length - 3) {
-          if ((i % 4 == 0 || i % 5 == 0) && 'aeiouAEIOU'.contains(word[i])) {
-            result.write('\u00AD');
-          }
+    if (hyphenatedCount > 0) {
+      print('✂️ Heceleme: $hyphenatedCount kelime bölündü');
+    }
+
+    return result;
+  }
+
+  /// Rusça kelime heceleme - Geliştirilmiş algoritma
+  String _hyphenateRussian(String word) {
+    final vowels = RegExp(r'[аэоуиыяюеёАЭОУИЫЯЮЕЁ]');
+    final consonants = RegExp(r'[бвгджзклмнпрстфхцчшщБВГДЖЗКЛМНПРСТФХЦЧШЩ]');
+
+    StringBuffer result = StringBuffer();
+
+    for (int i = 0; i < word.length; i++) {
+      result.write(word[i]);
+
+      // Son 2 harfi bölme
+      if (i >= word.length - 2) continue;
+
+      String current = word[i];
+      String next = i + 1 < word.length ? word[i + 1] : '';
+      String afterNext = i + 2 < word.length ? word[i + 2] : '';
+
+      bool shouldHyphenate = false;
+
+      // Kural 1: Ünlü + Ünsüz + Ünlü -> Ü-nlü
+      if (vowels.hasMatch(current) && consonants.hasMatch(next) && vowels.hasMatch(afterNext)) {
+        shouldHyphenate = true;
+      }
+
+      // Kural 2: Ünsüz + Ünlü + Ünsüz -> Ün-süz (kelime ortasında)
+      else if (i > 2 && consonants.hasMatch(current) && vowels.hasMatch(next) && i < word.length - 3) {
+        shouldHyphenate = true;
+      }
+
+      // Kural 3: Çift ünsüz -> iki ünsüz arasında böl
+      else if (consonants.hasMatch(current) && consonants.hasMatch(next) && i > 1 && i < word.length - 2) {
+        String prev = i > 0 ? word[i - 1] : '';
+        if (vowels.hasMatch(prev)) {
+          shouldHyphenate = true;
         }
       }
-      return result.toString();
-    });
+
+      if (shouldHyphenate) {
+        result.write('\u00AD');
+      }
+    }
+
+    return result.toString();
+  }
+
+  /// İngilizce kelime heceleme - Geliştirilmiş algoritma
+  String _hyphenateEnglish(String word) {
+    final vowels = 'aeiouAEIOU';
+    final consonants = 'bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ';
+
+    StringBuffer result = StringBuffer();
+
+    for (int i = 0; i < word.length; i++) {
+      result.write(word[i]);
+
+      // Son 2 harfi bölme
+      if (i >= word.length - 2) continue;
+
+      String current = word[i];
+      String next = i + 1 < word.length ? word[i + 1] : '';
+      String afterNext = i + 2 < word.length ? word[i + 2] : '';
+
+      bool shouldHyphenate = false;
+
+      // Kural 1: Ünlü + Ünsüz + Ünlü
+      if (vowels.contains(current) && consonants.contains(next) && vowels.contains(afterNext)) {
+        shouldHyphenate = true;
+      }
+
+      // Kural 2: Ünsüz + Ünlü (kelime ortasında)
+      else if (i > 2 && consonants.contains(current) && vowels.contains(next) && i < word.length - 3) {
+        shouldHyphenate = true;
+      }
+
+      // Kural 3: Çift ünsüz
+      else if (consonants.contains(current) && consonants.contains(next) && i > 1 && i < word.length - 2) {
+        String prev = i > 0 ? word[i - 1] : '';
+        if (vowels.contains(prev)) {
+          shouldHyphenate = true;
+        }
+      }
+
+      if (shouldHyphenate) {
+        result.write('\u00AD');
+      }
+    }
+
+    return result.toString();
   }
 
   Widget _buildFormattedText(String text, TextStyle style) {
     final formattedText = _formatText(text);
-    final paragraphs = formattedText.split('\n\n');
 
-    List<InlineSpan> spans = [];
+    // Debug: AutoHyphenatingText kullanıldığını doğrula
+    print('📝 AutoHyphenatingText kullanılıyor - Metin uzunluğu: ${formattedText.length} karakter');
 
-    for (int i = 0; i < paragraphs.length; i++) {
-      final paragraph = paragraphs[i].trim();
-      if (paragraph.isEmpty) continue;
-
-      spans.add(TextSpan(
-        text: '\u2003$paragraph',
-        style: style.copyWith(
-          fontFamily: 'SFPro',
-          height: 1.5,
-          letterSpacing: 0,
-          wordSpacing: 0,
-          fontSize: style.fontSize,
-        ),
-      ));
-
-      if (i < paragraphs.length - 1) {
-        spans.add(TextSpan(text: '\n\n'));
-      }
+    // Uzun kelime varsa göster (test için)
+    final longWords = RegExp(r'\b\w{10,}\b').allMatches(formattedText).map((m) => m.group(0)).take(3).toList();
+    if (longWords.isNotEmpty) {
+      print('   🔤 Uzun kelimeler bulundu (heceleme yapılacak): ${longWords.join(", ")}');
     }
 
-    return RichText(
+    return AutoHyphenatingText(
+      formattedText,
       textAlign: TextAlign.justify,
-      text: TextSpan(
-        children: spans,
-        style: style.copyWith(
-          fontFamily: 'SFPro',
-          height: 1.5,
-          letterSpacing: 0,
-          wordSpacing: 0,
-        ),
+      style: style.copyWith(
+        fontFamily: 'SFPro',
+        height: 1.5,
+        letterSpacing: 0,
+        wordSpacing: 0,
       ),
     );
   }
@@ -735,11 +812,14 @@ class BookPageBuilder {
                                 )
                               : LayoutBuilder(
                                   builder: (context, constraints) {
+                                    // Render öncesi son temizlik
+                                    final sanitizedSpan = _sanitizeSpanNewlines(contentSpan);
+
                                     return Container(
                                       constraints: BoxConstraints(minHeight: constraints.maxHeight),
                                       child: RichText(
                                         textAlign: TextAlign.left,
-                                        text: contentSpan,
+                                        text: sanitizedSpan,
                                       ),
                                     );
                                   },
@@ -785,6 +865,55 @@ class BookPageBuilder {
     cleaned = cleaned.replaceAll(RegExp(r'\s+$', multiLine: true), '');
 
     return cleaned.trim();
+  }
+
+  /// Son render aşamasında \n\n'leri temizle
+  static TextSpan _sanitizeSpanNewlines(TextSpan span) {
+    final children = span.children;
+    if (children == null || children.isEmpty) {
+      if (span.text != null && span.text!.contains('\n\n')) {
+        return TextSpan(
+          text: span.text!.replaceAll(RegExp(r'\n{2,}'), '\n'),
+          style: span.style,
+          semanticsLabel: span.semanticsLabel,
+        );
+      }
+      return span;
+    }
+
+    final sanitizedChildren = <InlineSpan>[];
+    String? prevText;
+
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      if (child is TextSpan) {
+        String text = child.text ?? '';
+
+        // 1) Span içi çift \n temizle
+        text = text.replaceAll(RegExp(r'\n{2,}'), '\n');
+
+        // 2) Önceki span \n ile bittiyse, bu span başındaki \n'leri sil
+        if (prevText != null && prevText.endsWith('\n') && text.startsWith('\n')) {
+          text = text.replaceFirst(RegExp(r'^\n+'), '');
+        }
+
+        if (text.isNotEmpty || child.children != null) {
+          sanitizedChildren.add(TextSpan(
+            text: text.isEmpty ? null : text,
+            style: child.style,
+            semanticsLabel: child.semanticsLabel,
+            children: child.children != null ? _sanitizeSpanNewlines(TextSpan(children: child.children)).children : null,
+          ));
+        }
+
+        prevText = text.isNotEmpty ? text : prevText;
+      } else {
+        sanitizedChildren.add(child);
+        prevText = null;
+      }
+    }
+
+    return TextSpan(children: sanitizedChildren, style: span.style);
   }
 
   static bool _isQuoteOnlyPage(TextSpan contentSpan) {
@@ -1092,5 +1221,26 @@ class BookPageBuilder {
             )),
       ),
     );
+  }
+
+  /// TextSpan'dan düz metin çıkarır
+  static String _extractTextFromSpan(TextSpan span) {
+    StringBuffer buffer = StringBuffer();
+
+    void extractText(InlineSpan currentSpan) {
+      if (currentSpan is TextSpan) {
+        if (currentSpan.text != null) {
+          buffer.write(currentSpan.text);
+        }
+        if (currentSpan.children != null) {
+          for (var child in currentSpan.children!) {
+            extractText(child);
+          }
+        }
+      }
+    }
+
+    extractText(span);
+    return buffer.toString();
   }
 }

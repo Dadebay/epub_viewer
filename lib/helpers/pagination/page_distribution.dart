@@ -583,6 +583,12 @@ class PageDistributor {
     mergedPages = _fixOverflowingPages(mergedPages, metrics);
     // POST-PROCESSING: sayfaları %97 yüksekliğe kadar doldur
     mergedPages = _compactPagesToTargetHeight(mergedPages, metrics, 0.97);
+    // POST-PROCESSING: çift newline temizliği + log
+    mergedPages = _sanitizeDoubleNewlinesInPages(mergedPages, 'merge-post');
+    // POST-PROCESSING: sayfa sınırında \n çakışmasını temizle
+    mergedPages = _trimPageBoundaryNewlines(mergedPages, 'merge-post');
+    // POST-PROCESSING: sayfa içi span sınırlarında \n çakışmasını temizle
+    mergedPages = _trimAdjacentSpanNewlines(mergedPages, 'merge-post');
 
     print('========== BİRLEŞTİRME BİTTİ ==========\n');
 
@@ -708,6 +714,152 @@ class PageDistributor {
       }
     }
 
+    // Son aşama: çift newline temizliği + log
+    pages = _sanitizeDoubleNewlinesInPages(pages, 'compact');
+    // Son aşama: sayfa sınırında \n çakışmasını temizle
+    pages = _trimPageBoundaryNewlines(pages, 'compact');
+    // Son aşama: sayfa içi span sınırlarında \n çakışmasını temizle
+    pages = _trimAdjacentSpanNewlines(pages, 'compact');
+    return pages;
+  }
+
+  /// Aynı sayfa içindeki span sınırlarında \n çakışmasını temizle
+  List<List<InlineSpan>> _trimAdjacentSpanNewlines(List<List<InlineSpan>> pages, String stage) {
+    for (int pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      final spans = pages[pageIndex];
+      int i = 0;
+      while (i < spans.length - 1) {
+        final current = spans[i];
+        final next = spans[i + 1];
+
+        if (current is TextSpan && next is TextSpan) {
+          final currentText = current.text ?? '';
+          final nextText = next.text ?? '';
+
+          if (currentText.endsWith('\n') && nextText.startsWith('\n')) {
+            final cleanedNext = nextText.replaceFirst(RegExp(r'^\n+\s*'), '');
+            if (cleanedNext.isEmpty) {
+              spans.removeAt(i + 1);
+              print('   🧹 Span sınırı \n kaldırıldı | stage: $stage | sayfa: ${pageIndex + 1} | span: ${i + 1}');
+              continue;
+            }
+            if (cleanedNext != nextText) {
+              spans[i + 1] = TextSpan(
+                text: cleanedNext,
+                style: next.style,
+                semanticsLabel: next.semanticsLabel,
+              );
+              print('   🧹 Span sınırı \n temizlendi | stage: $stage | sayfa: ${pageIndex + 1} | span: ${i + 1}');
+            }
+          }
+        }
+
+        i++;
+      }
+    }
+    return pages;
+  }
+
+  /// Sayfa sınırında biri \n ile bitiyor diğeri \n ile başlıyorsa, birini temizle
+  List<List<InlineSpan>> _trimPageBoundaryNewlines(List<List<InlineSpan>> pages, String stage) {
+    if (pages.length <= 1) return pages;
+
+    for (int pageIndex = 0; pageIndex < pages.length - 1; pageIndex++) {
+      final currentPage = pages[pageIndex];
+      final nextPage = pages[pageIndex + 1];
+
+      final lastTextIndex = _findLastTextSpanIndex(currentPage);
+      final firstTextIndex = _findFirstTextSpanIndex(nextPage);
+
+      if (lastTextIndex == -1 || firstTextIndex == -1) continue;
+
+      final lastSpan = currentPage[lastTextIndex] as TextSpan;
+      final firstSpan = nextPage[firstTextIndex] as TextSpan;
+
+      final lastText = lastSpan.text ?? '';
+      final firstText = firstSpan.text ?? '';
+
+      const targetSnippet = 'Но это было почти два года назад';
+      final lastPreview = lastText.replaceAll('\n', '\\n');
+      final firstPreview = firstText.replaceAll('\n', '\\n');
+      final boundaryHasDoubleNl = lastText.endsWith('\n') && firstText.startsWith('\n');
+      final boundaryHasTarget = lastText.contains(targetSnippet) || firstText.contains(targetSnippet);
+
+      if (boundaryHasDoubleNl || boundaryHasTarget) {
+        print('   🧭 BOUNDARY DEBUG | stage: $stage | sayfa: ${pageIndex + 1} -> ${pageIndex + 2}');
+        print('      🔚 last:  ${lastPreview.length > 200 ? lastPreview.substring(lastPreview.length - 200) : lastPreview}');
+        print('      🔜 first: ${firstPreview.length > 200 ? firstPreview.substring(0, 200) : firstPreview}');
+      }
+
+      // 1) Eğer iki sayfa sınırında \n çakışıyorsa, sonraki sayfanın başındaki \n'i kaldır
+      if (lastText.endsWith('\n') && firstText.startsWith('\n')) {
+        final cleanedFirst = firstText.replaceFirst(RegExp(r'^\n+'), '');
+        if (cleanedFirst != firstText) {
+          nextPage[firstTextIndex] = TextSpan(
+            text: cleanedFirst,
+            style: firstSpan.style,
+            semanticsLabel: firstSpan.semanticsLabel,
+          );
+        }
+      }
+
+      // 2) Eğer sayfa \n ile bitiyorsa ve sonraki sayfa gerçek metinle başlıyorsa, sonda tek \n kaldır
+      if (lastText.endsWith('\n') && firstText.trimLeft().isNotEmpty) {
+        final cleanedLast = lastText.replaceFirst(RegExp(r'\n+$'), '');
+        if (cleanedLast != lastText) {
+          currentPage[lastTextIndex] = TextSpan(
+            text: cleanedLast,
+            style: lastSpan.style,
+            semanticsLabel: lastSpan.semanticsLabel,
+          );
+        }
+      }
+    }
+
+    return pages;
+  }
+
+  int _findLastTextSpanIndex(List<InlineSpan> spans) {
+    for (int i = spans.length - 1; i >= 0; i--) {
+      final span = spans[i];
+      if (span is TextSpan && span.text != null && span.text!.isNotEmpty) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  int _findFirstTextSpanIndex(List<InlineSpan> spans) {
+    for (int i = 0; i < spans.length; i++) {
+      final span = spans[i];
+      if (span is TextSpan && span.text != null && span.text!.isNotEmpty) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// Birleşen sayfalarda oluşan çift newline'ları temizle ve logla
+  List<List<InlineSpan>> _sanitizeDoubleNewlinesInPages(List<List<InlineSpan>> pages, String stage) {
+    for (int pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      final spans = pages[pageIndex];
+      for (int i = 0; i < spans.length; i++) {
+        final span = spans[i];
+        if (span is TextSpan && span.text != null && span.text!.contains('\n\n')) {
+          final original = span.text!;
+          final cleaned = original.replaceAll(RegExp(r'\n{2,}'), '\n');
+          if (cleaned != original) {
+            final preview = original.replaceAll('\n', '\\n');
+            print('   🧹 Çift newline temizlendi | stage: $stage | sayfa: ${pageIndex + 1} | span: ${preview.length > 80 ? preview.substring(0, 80) : preview}');
+            spans[i] = TextSpan(
+              text: cleaned,
+              style: span.style,
+              semanticsLabel: span.semanticsLabel,
+            );
+          }
+        }
+      }
+    }
     return pages;
   }
 
